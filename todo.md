@@ -1,17 +1,16 @@
 # Glenda Microkernel Migration Todo List
 
 ## Phase 0: Build System Infrastructure (Ref: `xtask.md`)
-- [ ] **Dependencies**: Add `serde` and `toml` to `xtask/Cargo.toml`.
-- [ ] **Configuration**: Create `components.toml` for defining boot modules.
-- [ ] **Modular Refactoring**:
-    - [ ] Split `xtask` into modules: `config`, `build`, `pack`, `qemu`, `fs`.
-    - [ ] Implement `config.rs` to parse `components.toml`.
-    - [ ] Implement `pack.rs` to generate `target/bootfs/payload.bin` (Header + Modules).
-    - [ ] Implement `build.rs` to ensure `pack` runs before kernel build.
-- [ ] **Kernel Integration (Incbin Strategy)**:
-    - [ ] Create `kernel/src/asm/payload.S` using `.incbin` to include `payload.bin`.
-    - [ ] Create `kernel/src/boot_payload.rs` to expose `_payload_start/end` symbols.
-    - [ ] Update `kernel/build.rs` to watch `payload.bin` for changes.
+- [x] **Dependencies**: Add `serde` and `toml` to `xtask/Cargo.toml`.
+- [x] **Configuration**: Create `config.toml` for defining boot modules.
+- [x] **Modular Refactoring**:
+    - [x] Split `xtask` into modules: `config`, `build`, `pack`, `qemu`, `fs`.
+    - [x] Implement `config.rs` to parse `config.toml`.
+    - [x] Implement `pack.rs` to generate `target/bootfs/payload.bin` (Header + Modules).
+    - [x] Implement `build.rs` to ensure `pack` runs before kernel build.
+- [x] **Kernel Integration (Incbin Strategy)**:
+    - [x] Create `kernel/src/asm/payload.S` using `.incbin` to include `payload.bin`.
+    - [x] Update `kernel/build.rs` to watch `payload.bin` for changes.
 - [ ] **GRUB / Multiboot Support**:
     - [ ] Add `multiboot2` header to kernel assembly entry.
     - [ ] Implement Multiboot2 tag parser in Rust.

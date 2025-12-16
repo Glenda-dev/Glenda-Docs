@@ -10,9 +10,9 @@ The core responsibility of the build system in the microkernel architecture is t
 3.  Package components into a **Boot Payload**.
 4.  Embed the payload into the Kernel image.
 
-## 2. Configuration (`components.toml`)
+## 2. Configuration (`config.toml`)
 
-The build system is data-driven. The list of user-space components to be packaged is defined in `components.toml` at the workspace root.
+The build system is data-driven. The list of user-space components to be packaged is defined in `config.toml` at the workspace root.
 
 ```toml
 [[components]]
@@ -27,7 +27,7 @@ kind = "root_task"               # Type: root_task, driver, server, file
 
 When running `cargo xtask build`, the following steps occur:
 
-1.  **Parse Configuration**: `xtask` reads `components.toml`.
+1.  **Parse Configuration**: `xtask` reads `config.toml`.
 2.  **Build Components**:
     *   Iterates through each component.
     *   Executes the specified `build_cmd` in the component's directory.
@@ -69,12 +69,12 @@ The `modules.bin` blob has the following layout:
 Update `xtask/Cargo.toml` to include `serde` and `toml` for configuration parsing.
 
 ### Step 2: Create Configuration
-Create `components.toml` in the workspace root with the initial Root Task configuration.
+Create `config.toml` in the workspace root with the initial Root Task configuration.
 
 ### Step 3: Refactor `xtask`
 1.  Define `Config` and `ComponentConfig` structs deriving `Deserialize`.
 2.  Implement `process_components` function to:
-    *   Read `components.toml`.
+    *   Read `config.toml`.
     *   Execute build commands.
     *   Generate `target/bootfs/payload.bin` with the specified header and entry format.
 3.  Update `build` command to call `process_components` before building the kernel.
