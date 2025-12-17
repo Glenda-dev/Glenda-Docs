@@ -19,11 +19,17 @@ The syscall table should be replaced with ~5-7 primitives:
 | **`sys_send`** | `cptr`, `msg_info`, `...` | Send a message (blocking or non-blocking). |
 | **`sys_recv`** | `cptr`, `out_msg`, `...` | Wait for a message. |
 | **`sys_yield`** | `None` | Give up remaining timeslice. |
-| **`sys_debug_putc`** | `char` | (Debug only) Print to serial console. |
+| **`sys_print`** | `char` | (Debug only) Print to serial console. |
 
 ### 2.2 Invocation Model
 Most operations are performed by "invoking" a capability.
 - **`sys_call(cptr, ...)`** is the generic entry point.
+- **Arguments**:
+    - Primary arguments (e.g., method ID, first few parameters) are passed in registers.
+    - Extra arguments are read from the caller's **UTCB**.
+- **Results**:
+    - Primary results are returned in registers.
+    - Extra results are written to the caller's **UTCB**.
 - If `cptr` is an **Endpoint**: Perform IPC.
 - If `cptr` is a **Kernel Object** (e.g., PageTable, TCB): Perform a method on that object.
     - Example: `sys_call(page_table_cap, MAP_METHOD, frame_cap, vaddr, flags)`

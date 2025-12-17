@@ -41,10 +41,18 @@ The primary use of a cap.
 A thread can create a new capability from an existing one, potentially with reduced rights.
 *   **Mint**: Create a copy with a specific **Badge** or reduced permissions (e.g., Read-Write Frame -> Read-Only Frame).
 
-### 4.3 Transfer
-Capabilities can be moved between CSpaces via IPC.
-*   **Grant**: Move a cap to another process. The sender loses it (or shares it, depending on implementation).
-*   This is how a server gives a client access to a shared memory buffer (Granting a Frame cap).
+### 4.3 Transfer (Delegation)
+Capabilities can be transferred between CSpaces via IPC messages. This is the primary mechanism for authority delegation.
+
+*   **Mechanism**:
+    1.  **Sender**: Places the CPTR of the capability to be transferred into the **UTCB** (specifically in the IPC message header or a dedicated "Cap Transfer" area).
+    2.  **Receiver**: Specifies a "Receive Window" (a CNode and an index) in its own **UTCB** where the incoming capability should be stored.
+    3.  **Kernel**:
+        *   Verifies the sender has the authority to transfer the cap (e.g., `Grant` right on the Endpoint).
+        *   Looks up the capability in the sender's CSpace.
+        *   Inserts a copy (or moves it) into the receiver's CSpace at the specified slot.
+*   **Grant**: The standard operation is to copy the capability. The sender retains access unless they explicitly delete it.
+*   **Use Case**: A server grants a client access to a shared memory buffer by sending a `Frame` cap. A client grants a server access to reply by sending a `Reply` cap (implicitly or explicitly).
 
 ### 4.4 Revocation
 *   **Revoke**: A parent can delete all child capabilities derived from a specific capability. This allows reclaiming resources.

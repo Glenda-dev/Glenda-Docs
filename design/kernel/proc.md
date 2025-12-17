@@ -29,12 +29,21 @@ Rename `Process` to `TCB` (Thread Control Block) and strip it down.
 **Add:**
 - `cspace_root: Capability`: Cap pointing to the root `CNode` (defines the thread's capability view).
 - `vspace_root: Capability`: Cap pointing to the root `PageTable` (defines the thread's address space).
-- `utcb: VirtAddr`: Pointer to the User Thread Control Block (user-mapped kernel info area).
+- `utcb_frame: PhysFrame`: The physical frame backing the UTCB.
+- `utcb_base: VirtAddr`: The virtual address where the UTCB is mapped in the thread's VSpace.
 - `irqhandler: Capability`: The endpoint to send application interrupt (exception) IPCs to.
-- `ipc_buffer: VirtAddr`: User-space buffer for long IPC messages.
 - `state`: Update enum to include IPC states (`BlockedSend`, `BlockedRecv`, `BlockedCall`).
 
-### 2.3 Scheduler Changes
+### 2.3 UTCB (User Thread Control Block)
+Each thread has a dedicated page of memory (UTCB) shared between the kernel and the user thread.
+- **Purpose**:
+    - Storage for IPC message registers (MRs) that don't fit in CPU registers.
+    - Thread-local data (TLS) pointer.
+    - IPC buffer address.
+- **Location**: Mapped at a fixed or randomized location in the user VSpace, known to the thread.
+- **Access**: Read/Write by User, Read/Write by Kernel.
+
+### 2.4 Scheduler Changes
 - **Preemptive Priority Scheduling**: Implement strict priority-based scheduling (0-255).
 - **Time Slices**: Round-robin for threads with equal priority.
 - **IPC Integration**:

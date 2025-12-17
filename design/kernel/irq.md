@@ -15,7 +15,7 @@ The kernel must not handle user exceptions (Page Fault, Illegal Instruction, etc
 1.  **Trap Entry**: Kernel catches exception.
 2.  **State Save**: Save fault details (`scause`, `stval`, `sepc`) into the thread's UTCB.
 3.  **IPC Generation**: Kernel constructs a "Fault Message".
-4.  **IPC Send**: Kernel forces the faulting thread to send this message to its registered **ExceptionHandler Endpoint**.
+4.  **IPC Send**: Kernel forces the faulting thread to send this message to its registered **ExceptionHandler Endpoint** (stored in the TCB's `irqhandler` field).
 5.  **Block**: The thread enters `BlockedException` state.
 6.  **Resolution**: The ExceptionHandler (user-space) receives the message, fixes the issue (e.g., maps a page), and replies.
 7.  **Resume**: The thread resumes execution at the faulting instruction (or next, depending on reply).

@@ -14,10 +14,13 @@ In Glenda's microkernel architecture, Inter-Process Communication (IPC) is the f
 
 An IPC message consists of:
 
-1.  **Message Tag (MR0)**: Describes the message protocol, length, and flags.
+1.  **Message Tag (MR0)**: Describes the message protocol, length, and flags. Passed in a register.
 2.  **Short Message (Registers)**: Up to 8 machine words passed directly in CPU registers (e.g., `a0`-`a7` on RISC-V). This is sufficient for most system calls and simple protocols.
-3.  **Long Message (Optional)**: For larger data transfers, a shared memory buffer (IPC Buffer) defined in the thread's UTCB (User Thread Control Block) is used.
+3.  **Extended Message (UTCB)**: If the message exceeds the register count, the remaining words are stored in the thread's UTCB (Message Registers MR8+). The kernel copies these from the sender's UTCB to the receiver's UTCB.
 4.  **Capabilities (Optional)**: A message can transfer a Capability from the sender's CSpace to the receiver's CSpace (Cap Delegation).
+    *   **Sender**: Writes a **Cap Transfer Descriptor** (CTD) into its UTCB. The CTD contains the CPTR of the cap to send.
+    *   **Receiver**: Writes a **Receive Window Descriptor** (RWD) into its UTCB. The RWD specifies the CNode and index where the received cap should be placed.
+    *   **Kernel**: Validates the transfer (checking for `Grant` rights) and performs the copy/move operation during the IPC handshake.
 
 ## 4. IPC Operations
 

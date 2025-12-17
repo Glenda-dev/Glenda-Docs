@@ -26,23 +26,24 @@ The microkernel is responsible for the following minimal set of features:
 ### 3.1 Capability System (CSpace)
 Security and resource management are based on Capabilities. A Capability is a kernel-protected token that refers to a kernel object with specific access rights.
 
-*   **Objects**: TCB (Thread Control Block), Endpoint (IPC Port), Frame (Physical Page), Untyped (Free Memory), IrqHandler.
+*   **Objects**: TCB (Thread Control Block), Endpoint (IPC Port), Frame (Physical Page), Untyped (Free Memory), IrqHandler, PageTable, CNode.
 *   **CSpace**: Each process has a Capability Space (CSpace) storing its capabilities.
 *   **Invocation**: System calls are performed by invoking a capability (e.g., `invoke(cptr, args)`).
 
 ### 3.2 Inter-Process Communication (IPC)
 IPC is the only way for threads to interact.
 *   **Synchronous**: IPC is typically synchronous to avoid buffering overhead.
-*   **Message Passing**: Short messages are passed via registers; long messages use shared memory buffers.
+*   **Message Passing**: Short messages are passed via registers; extended messages and capabilities are passed via the **UTCB** (User Thread Control Block).
 *   **Notifications**: Asynchronous signals (similar to semaphores) for interrupts.
 
 ### 3.3 Exception Handling (Application Interrupts)
 The kernel does not handle page faults or other application exceptions internally. Instead, these are treated as **Application Interrupts**.
 1.  When a thread faults (e.g., Page Fault), the kernel suspends the thread.
-2.  The kernel generates an IPC message describing the fault.
-3.  This message is sent to the thread's registered **IRQHandler** (formerly Pager).
-4.  The IRQHandler resolves the fault (e.g., allocates a frame) and replies to the kernel.
-5.  The kernel resumes the faulted thread.
+2.  The kernel saves fault details to the thread's UTCB.
+3.  The kernel generates an IPC message describing the fault.
+4.  This message is sent to the thread's registered **Exception Handler** (an Endpoint capability stored in the TCB).
+5.  The Handler resolves the fault (e.g., allocates a frame) and replies to the kernel.
+6.  The kernel resumes the faulted thread.
 
 ### 3.4 Root Task
 The **Root Task** is the first user-space process started by the kernel.
@@ -71,8 +72,9 @@ The **Root Task** is the first user-space process started by the kernel.
 
 ## 5. System Call Interface (Draft)
 
-*   `sys_yield()`: Relinquish CPU.
-*   `sys_send(dest_cptr, msg)`: Send IPC.
-*   `sys_recv(src_cptr, buf)`: Receive IPC.
-*   `sys_call(cptr, msg)`: Atomic Send + Recv (RPC style).
-*   `sys_reply(cptr, msg)`: Reply to a call (non-blocking).
+*   **`sys_call(cptr, ...)`**: Atomic Send + Recv. Used for RPC.
+*   **`sys_reply_recv(cptr, ...)`**: Reply to last caller and wait for next. (Server loop).
+*   **`sys_send(cptr, ...)`**: Send a message (blocking or non-blocking).
+*   **`sys_recv(cptr, ...)`**: Wait for a message.
+*   **`sys_yield()`**: Give up remaining timeslice.
+*   **`sys_print(char)`**: (Debug only) Print to serial console.

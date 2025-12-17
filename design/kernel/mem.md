@@ -17,6 +17,7 @@ The kernel's role is reduced to **Mechanism Only**: it ensures safety and isolat
 
 ### 2.2 Virtual Memory (Address Spaces)
 - **VSpace**: Represented by a top-level `PageTable` capability.
+- **UTCB Mapping**: Each thread has a UTCB page mapped into its VSpace. This mapping is established during thread creation/configuration.
 - **Mapping**:
     - No `mmap` syscall.
     - Instead: `invoke(PageTableCap, Map, FrameCap, vaddr, perms)`.
