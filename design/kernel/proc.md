@@ -51,9 +51,18 @@ Each thread has a dedicated page of memory (UTCB) shared between the kernel and 
     - When `sys_send` blocks (if receiver not ready), set state to `BlockedSend`.
     - Direct switch: If possible, switch directly to the target thread on IPC to preserve cache locality.
 
-### 2.3 Thread Creation
+### 2.5 Thread Creation
 - Kernel no longer has `fork()` or `exec()`.
 - New flow:
     1.  Parent thread invokes `Untyped` cap to retype memory into a new `TCB` object.
     2.  Parent invokes `TCB` cap to set registers (PC, SP) and CSpace.
     3.  Parent invokes `TCB` cap to `Resume` (start) the thread.
+
+### 2.6 Thread Table & Identification
+*   **Renaming**: `PROC_TABLE` will be renamed to `TCB_TABLE` or `THREAD_TABLE`.
+*   **Storage**:
+    *   *Phase 1*: Keep a static array `[Option<TCB>; N]` for easy migration.
+    *   *Phase 2*: Move to dynamic allocation. TCBs are allocated from `Untyped` memory. The kernel tracks them via Capabilities.
+*   **Identification**:
+    *   Threads are identified by **Capabilities** (CPTR) in user space.
+    *   Internally, the kernel may use a `TID` or direct pointer references.
