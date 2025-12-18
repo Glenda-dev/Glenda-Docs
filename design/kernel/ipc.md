@@ -32,16 +32,6 @@ The system call interface provides the following primitives:
 *   **`Recv(src_cptr, buf)`**:
     *   Blocking receive.
     *   Blocks until a message arrives from `src` (or any open Endpoint).
-*   **`Call(dest_cptr, msg)`**:
-    *   Atomic `Send` + `Recv`.
-    *   Used for RPC (Remote Procedure Call).
-    *   The kernel guarantees that the reply comes from the callee.
-*   **`Reply(msg)`**:
-    *   Non-blocking send to the thread that was just `Recv`'d from.
-    *   Used by servers to return results without blocking.
-*   **`ReplyRecv(msg)`**:
-    *   Atomic `Reply` + `Recv`.
-    *   The standard loop for server threads: "Reply to previous client, then wait for next request."
 
 ## 5. Endpoints
 
@@ -50,11 +40,3 @@ IPC is not directed at "Thread IDs" but at **Endpoints**.
 *   Threads holding a `Send` capability to an Endpoint can send messages.
 *   Threads holding a `Recv` capability to an Endpoint can listen for messages.
 *   This allows multiple clients to talk to a single server without knowing the server's internal thread ID.
-
-## 6. Notifications (Asynchronous IPC)
-
-For interrupts and simple signals, full synchronous IPC is too heavy.
-*   **Notification Objects**: Similar to semaphores or event bits.
-*   **Signal**: Non-blocking. Sets a bit in the receiver's notification word.
-*   **Wait**: Blocking. Wakes up when a bit is set.
-*   Hardware interrupts are delivered as Notifications from the kernel to the driver thread.

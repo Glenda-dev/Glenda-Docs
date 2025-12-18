@@ -1,36 +1,49 @@
-# Memory Management Migration Guide
+# Memory Management Design
 
-## 1. Current Status
-`kernel/src/mem` currently implements a full VM subsystem:
-- `mmap`/`munmap` logic.
-- VMA (Virtual Memory Area) tracking.
-- `brk` heap management.
-- Page table manipulation mixed with policy.
+## 1. Overview
 
-## 2. Target Architecture (Microkernel)
-The kernel's role is reduced to **Mechanism Only**: it ensures safety and isolation but dictates no policy.
+In Glenda's microkernel architecture, the kernel's role in memory management is reduced to **Mechanism Only**: it ensures safety and isolation but dictates no policy. All physical memory allocation and virtual memory mapping policies are implemented in user space.
 
-### 2.1 Physical Memory (Untyped)
-- **Boot**: All free physical memory is tracked as `Untyped` regions.
-- **Root Task**: Receives capabilities for all `Untyped` regions.
-- **Allocation**: No global `kmalloc` for user objects. Userspace must "Retype" `Untyped` memory into specific kernel objects (`Frame`, `TCB`, `PageTable`) via system calls.
+## 2. Physical Memory (Untyped)
 
-### 2.2 Virtual Memory (Address Spaces)
-- **VSpace**: Represented by a top-level `PageTable` capability.
-- **UTCB Mapping**: Each thread has a UTCB page mapped into its VSpace. This mapping is established during thread creation/configuration.
-- **Mapping**:
-    - No `mmap` syscall.
-    - Instead: `invoke(PageTableCap, Map, FrameCap, vaddr, perms)`.
-    - The kernel simply inserts the PTE. It does not track VMAs.
-- **Unmapping**:
-    - `invoke(PageTableCap, Unmap, vaddr)`.
+*   **Boot**: All free physical memory is tracked as `Untyped` regions.
+*   **Root Task**: Receives capabilities for all `Untyped` regions at startup.
+*   **Allocation**: There is no global `kmalloc` for user objects. Userspace must "Retype" `Untyped` memory into specific kernel objects (`Frame`, `TCB`, `PageTable`, `Endpoint`, `CNode`) via system calls.
+*   **Retype Operation**:
+    *   Invoked on an `Untyped` capability.
+    *   Splits a portion of the untyped memory to create new kernel objects.
+    *   Returns capabilities to the new objects.
 
-### 2.3 Kernel Memory
-- The kernel still needs a small internal allocator (`buddy.rs` / `slab`) for its own metadata (if not using a fully static partitioning model like seL4).
-- Ideally, kernel metadata for user objects is stored in the memory provided by the user (via `Untyped` retyping), ensuring strict resource accounting.
+## 3. Virtual Memory (Address Spaces)
 
-### 2.4 Migration Steps
-1.  Keep `pagetable.rs` (hardware logic).
-2.  Keep `pmem.rs` (basic frame allocator for boot).
-3.  **Delete** `mmap.rs`, `uvm.rs` (user logic), `vm.rs` (high-level logic).
-4.  Implement `Retype` and `Map` invocations in `cap.rs` / `syscall.rs`.
+*   **VSpace**: An address space is represented by a top-level `PageTable` capability.
+*   **UTCB Mapping**: Each thread has a UTCB page mapped into its VSpace. This mapping is established during thread creation/configuration.
+*   **Mapping Operation**:
+    *   Performed by invoking `sys_invoke` on a `PageTable` capability.
+    *   **Arguments**: `FrameCap`, `vaddr`, `permissions`.
+    *   The kernel simply inserts the PTE (Page Table Entry) into the hardware page table. It does not track VMAs (Virtual Memory Areas) or manage regions; that is the responsibility of the user-space pager.
+*   **Unmapping Operation**:
+    *   Performed by invoking `sys_invoke` on a `PageTable` capability.
+    *   **Arguments**: `vaddr`.
+    *   Removes the mapping.
+
+## 4. Kernel Memory
+
+*   The kernel maintains a small internal allocator for its own minimal metadata needs during boot.
+*   Once the system is running, all memory required for kernel objects (TCBs, Page Tables, etc.) is derived from user-provided `Untyped` memory. This ensures strict resource accounting and prevents Denial of Service attacks against the kernel memory allocator.
+
+## 5. Capability Interface
+
+The `PageTable` kernel object exposes the following methods via `sys_invoke`:
+
+| Method | Description |
+| :--- | :--- |
+| `Map` | Map a `Frame` capability to a virtual address. |
+| `Unmap` | Unmap a virtual address. |
+| `GetStatus` | Query the status of a mapping (optional). |
+
+The `Untyped` kernel object exposes:
+
+| Method | Description |
+| :--- | :--- |
+| `Retype` | Create new kernel objects from this memory region. |

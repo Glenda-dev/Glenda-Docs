@@ -1,68 +1,137 @@
-# Process Management Migration Guide
+# Process Management Design
 
-## 1. Current Status
-The current `Process` struct in `kernel/src/proc/process.rs` is a monolithic design, containing:
-- Memory management fields (`mmap_head`, `heap_top`, `heap_base`).
-- Process relationship fields (`parent`, `exit_code`).
-- File system related fields (implied by `fs_init_wrapper`).
+## 1. Overview
 
-## 2. Target Architecture (Microkernel)
-In the L4 architecture, we strictly separate the **Execution Unit (Thread)** from the **Resource Container (Namespace)**.
+In Glenda's microkernel architecture, the concept of a "Process" is decomposed into orthogonal kernel objects to ensure policy-mechanism separation. The kernel manages **Threads** (execution units), while **Address Spaces** (VSpace) and **Capability Spaces** (CSpace) are resources that threads utilize.
 
-### 2.1 Separation of Concerns
-*   **Namespace (Protection Domain)**: Defines *what* can be accessed.
-    *   **CSpace (Capability Space)**: The namespace for kernel objects. Represented by a root `CNode`.
-    *   **VSpace (Address Space)**: The namespace for memory addresses. Represented by a root `PageTable`.
-*   **Thread (TCB)**: Defines *how* code executes.
-    *   Has its own register state, priority, and time slice.
-    *   **References** a CSpace and VSpace, but does not "own" them structurally. Multiple threads can share the same CSpace/VSpace (multithreading).
+The core kernel object representing a thread of execution is the **TCB (Thread Control Block)**.
 
-### 2.2 Data Structure Changes
-Rename `Process` to `TCB` (Thread Control Block) and strip it down.
+## 2. Thread Lifecycle
 
-**Remove:**
-- `mmap_head`, `heap_top`, `heap_base`: Memory layout is managed by the user-space Pager/Loader.
-- `parent`, `exit_code`, `sleep_chan`: Process hierarchy is managed by the Root Task or a Process Server.
-- `name`: Can be kept for debugging, but strictly optional.
-- `root_pt_pa`: Moved to VSpace definition.
+A thread in Glenda exists in one of several strictly defined states. State transitions are triggered by system calls (IPC), interrupts, or explicit TCB capability invocations.
 
-**Add:**
-- `cspace_root: Capability`: Cap pointing to the root `CNode` (defines the thread's capability view).
-- `vspace_root: Capability`: Cap pointing to the root `PageTable` (defines the thread's address space).
-- `utcb_frame: PhysFrame`: The physical frame backing the UTCB.
-- `utcb_base: VirtAddr`: The virtual address where the UTCB is mapped in the thread's VSpace.
-- `irqhandler: Capability`: The endpoint to send application interrupt (exception) IPCs to.
-- `state`: Update enum to include IPC states (`BlockedSend`, `BlockedRecv`, `BlockedCall`).
+### 2.1 States
 
-### 2.3 UTCB (User Thread Control Block)
-Each thread has a dedicated page of memory (UTCB) shared between the kernel and the user thread.
-- **Purpose**:
-    - Storage for IPC message registers (MRs) that don't fit in CPU registers.
-    - Thread-local data (TLS) pointer.
-    - IPC buffer address.
-- **Location**: Mapped at a fixed or randomized location in the user VSpace, known to the thread.
-- **Access**: Read/Write by User, Read/Write by Kernel.
+| State | Description |
+| :--- | :--- |
+| **Inactive** | The TCB is allocated but not yet configured or has been explicitly suspended. It is not eligible for scheduling. |
+| **Ready** | The thread is ready to execute and is present in the scheduler's run queue. |
+| **Running** | The thread is currently executing on the CPU. |
+| **BlockedSend** | The thread is waiting to send an IPC message to a busy receiver. |
+| **BlockedRecv** | The thread is waiting to receive an IPC message from an endpoint. |
 
-### 2.4 Scheduler Changes
-- **Preemptive Priority Scheduling**: Implement strict priority-based scheduling (0-255).
-- **Time Slices**: Round-robin for threads with equal priority.
-- **IPC Integration**:
-    - When `sys_recv` blocks, remove TCB from run queue, set state to `BlockedRecv`.
-    - When `sys_send` blocks (if receiver not ready), set state to `BlockedSend`.
-    - Direct switch: If possible, switch directly to the target thread on IPC to preserve cache locality.
+### 2.2 State Transition Diagram
 
-### 2.5 Thread Creation
-- Kernel no longer has `fork()` or `exec()`.
-- New flow:
-    1.  Parent thread invokes `Untyped` cap to retype memory into a new `TCB` object.
-    2.  Parent invokes `TCB` cap to set registers (PC, SP) and CSpace.
-    3.  Parent invokes `TCB` cap to `Resume` (start) the thread.
+```text
+       +--------+   Configure    +----------+
+       | Untyped| -------------> | Inactive | <--------------------+
+       +--------+                +----------+                      |
+                                   |    ^                          |
+                            Resume |    | Suspend                  |
+                                   v    |                          |
+                              +----------+                         |
+                   +--------> |   Ready  | <------------------+    |
+                   |          +----------+                    |    |
+          Preempt  |               | Schedule                 |    |
+          / Yield  |               v                          |    |
+                   |          +---------+    IPC Recv         |    |
+                   +--------- | Running | ------------------> |    |
+                              +---------+                     |    |
+                                   |     IPC Send             |    |
+                                   +----------------------->  |    |
+                                                              |    |
+                                                              v    |
+                                                       +-------------+
+                                                       |   Blocked   |
+                                                       | (Send/Recv) |
+                                                       +-------------+
+```
 
-### 2.6 Thread Table & Identification
-*   **Renaming**: `PROC_TABLE` will be renamed to `TCB_TABLE` or `THREAD_TABLE`.
-*   **Storage**:
-    *   *Phase 1*: Keep a static array `[Option<TCB>; N]` for easy migration.
-    *   *Phase 2*: Move to dynamic allocation. TCBs are allocated from `Untyped` memory. The kernel tracks them via Capabilities.
-*   **Identification**:
-    *   Threads are identified by **Capabilities** (CPTR) in user space.
-    *   Internally, the kernel may use a `TID` or direct pointer references.
+## 3. Thread Control Block (TCB) Structure
+
+The TCB is a kernel-only structure. It contains the minimal state required to manage execution.
+
+### 3.1 Core Fields
+
+*   **Arch State**: Saved CPU registers (PC, SP, General Purpose Registers).
+*   **Priority**: Scheduling priority (0-255).
+*   **Time Slice**: Remaining time quantum.
+*   **State**: Current lifecycle state (enum).
+*   **CSpace Root**: Capability to the root `CNode` of the thread's capability space.
+*   **VSpace Root**: Capability to the root `PageTable` of the thread's address space.
+*   **UTCB Pointer**: Kernel virtual address of the User Thread Control Block.
+*   **Fault Handler**: Capability (Endpoint) to send fault IPCs to.
+
+### 3.2 User Thread Control Block (UTCB)
+
+The UTCB is a page of memory shared between the kernel and the user thread. It is mapped into the user's VSpace.
+
+*   **Purpose**:
+    *   **IPC Message Registers**: Storage for IPC payloads that exceed CPU registers.
+    *   **TLS**: Thread Local Storage pointer.
+    *   **IPC Buffer**: Destination for received capabilities.
+*   **Access**:
+    *   **User**: Read/Write.
+    *   **Kernel**: Read/Write (during IPC and thread setup).
+
+## 4. Lifecycle Operations
+
+### 4.1 Creation
+
+Thread creation is a user-space responsibility (usually performed by a root task or process manager), involving multiple kernel steps:
+
+1.  **Allocation**: A parent thread invokes an `Untyped` capability to **Retype** a portion of memory into a new `TCB` object.
+2.  **Address Space Setup**: The parent assigns a VSpace (PageTable cap) to the TCB.
+3.  **Capability Space Setup**: The parent assigns a CSpace (CNode cap) to the TCB.
+4.  **UTCB Setup**: The parent maps a frame into the new thread's VSpace to serve as the UTCB and registers its address in the TCB.
+5.  **Configuration**: The parent invokes the `TCB` capability to set the initial Instruction Pointer (IP), Stack Pointer (SP), and Priority.
+6.  **Activation**: The parent invokes `TCB::Resume()`, transitioning the thread from **Inactive** to **Ready**.
+
+### 4.2 Execution & Scheduling
+
+*   **Algorithm**: Preemptive Priority Round-Robin.
+*   **Policy**:
+    *   Always run the highest priority **Ready** thread.
+    *   If multiple threads have the same highest priority, round-robin between them.
+*   **Preemption**: Occurs when a higher priority thread becomes Ready (e.g., via interrupt or IPC unblocking) or when the current thread's time slice is exhausted.
+
+### 4.3 Fault Handling
+
+When a thread causes a fault (e.g., Page Fault, Illegal Instruction, Divide by Zero):
+
+1.  The kernel suspends the thread.
+2.  The kernel constructs an IPC message describing the fault.
+3.  The kernel sends this message to the thread's registered **Fault Handler** (an Endpoint capability).
+4.  The thread enters **BlockedSend** state (waiting for the handler to reply).
+5.  The Fault Handler (external monitor/debugger) receives the message, decides how to handle it (e.g., kill thread, fix mapping, restart), and replies.
+6.  The reply unblocks the thread (or modifies its state).
+
+### 4.4 Termination
+
+Threads do not "exit" in the traditional sense; they simply stop running or are destroyed.
+
+*   **Voluntary Exit**: A thread can call a method on its own TCB cap to suspend itself, or send a message to its manager requesting destruction.
+*   **Involuntary Termination**: A manager holding the TCB capability can invoke `TCB::Suspend()` or simply **Revoke** the TCB capability.
+*   **Resource Reclamation**:
+    *   When a TCB is destroyed (via `Revoke` on the Untyped memory that created it), the kernel ensures it is removed from scheduler queues.
+    *   Capabilities held in the thread's CSpace are *not* automatically destroyed unless the CNode itself is destroyed.
+    *   The VSpace is *not* automatically destroyed; it is merely detached.
+
+## 5. Capability Interface
+
+The `TCB` kernel object exposes the following methods via `syscall_invoke`:
+
+| Method | Description |
+| :--- | :--- |
+| `Configure` | Set CSpace root, VSpace root, UTCB address, and Fault Handler. |
+| `SetPriority` | Change the scheduling priority. |
+| `SetRegisters` | Write to the thread's saved register state (IP, SP, etc.). |
+| `GetRegisters` | Read the thread's saved register state. |
+| `Resume` | Transition from **Inactive** to **Ready**. |
+| `Suspend` | Transition from any state to **Inactive**. |
+
+## 6. Future Work: SMP Support
+
+*   **Affinity**: TCBs will need a CPU affinity field.
+*   **Migration**: Mechanism to move TCBs between per-CPU run queues.
+*   **IPI**: Inter-Processor Interrupts to trigger rescheduling on other cores.

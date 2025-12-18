@@ -2,7 +2,7 @@
 
 ## 1. Architecture Overview
 
-Glenda is transitioning from a monolithic architecture to an L4-like microkernel architecture. The core philosophy is **Minimality** and the **Separation of Mechanism and Policy**.
+Glenda is an L4-like microkernel architecture. The core philosophy is **Minimality** and the **Separation of Mechanism and Policy**.
 
 The kernel runs in Supervisor Mode (S-Mode) and provides only the most fundamental mechanisms required to construct an operating system. All higher-level abstractions, including device drivers, file systems, and network protocols, are implemented as user-space services.
 
@@ -14,7 +14,7 @@ The microkernel is responsible for the following minimal set of features:
 *   **Address Space Management**: Managing virtual memory mappings and page tables.
 *   **Thread Management**: Thread creation, scheduling, and context switching.
 *   **Capability System (Cap)**: Fine-grained access control for all kernel objects.
-*   **Interrupt Handling**: Converting hardware interrupts into asynchronous notifications sent to specific user-space handlers via the Capability system.
+*   **Interrupt Handling**: Converting hardware interrupts into IPC messages sent to specific user-space handlers via the Capability system.
 
 ### Components Moved to User Space
 *   **Device Drivers**: UART, VirtIO, etc.
@@ -28,13 +28,13 @@ Security and resource management are based on Capabilities. A Capability is a ke
 
 *   **Objects**: TCB (Thread Control Block), Endpoint (IPC Port), Frame (Physical Page), Untyped (Free Memory), IrqHandler, PageTable, CNode.
 *   **CSpace**: Each process has a Capability Space (CSpace) storing its capabilities.
-*   **Invocation**: System calls are performed by invoking a capability (e.g., `invoke(cptr, args)`).
+*   **Invocation**: System calls are performed by invoking a capability (e.g., `sys_invoke(cptr, args)`).
 
 ### 3.2 Inter-Process Communication (IPC)
 IPC is the only way for threads to interact.
 *   **Synchronous**: IPC is typically synchronous to avoid buffering overhead.
 *   **Message Passing**: Short messages are passed via registers; extended messages and capabilities are passed via the **UTCB** (User Thread Control Block).
-*   **Notifications**: Asynchronous signals (similar to semaphores) for interrupts.
+*   **Endpoints**: IPC is directed towards Endpoint objects, not threads directly.
 
 ### 3.3 Exception Handling (Application Interrupts)
 The kernel does not handle page faults or other application exceptions internally. Instead, these are treated as **Application Interrupts**.
@@ -70,11 +70,8 @@ The **Root Task** is the first user-space process started by the kernel.
     *   Root Task spawns File System Server.
     *   Root Task spawns Shell/Init process.
 
-## 5. System Call Interface (Draft)
+## 5. System Call Interface
 
-*   **`sys_call(cptr, ...)`**: Atomic Send + Recv. Used for RPC.
-*   **`sys_reply_recv(cptr, ...)`**: Reply to last caller and wait for next. (Server loop).
-*   **`sys_send(cptr, ...)`**: Send a message (blocking or non-blocking).
-*   **`sys_recv(cptr, ...)`**: Wait for a message.
-*   **`sys_yield()`**: Give up remaining timeslice.
-*   **`sys_print(char)`**: (Debug only) Print to serial console.
+*   **`sys_invoke(cptr, ...)`**: Invoke a method on a kernel object (TCB, PageTable, etc.).
+*   **`sys_send(cptr, ...)`**: Send a message to an Endpoint (blocking).
+*   **`sys_recv(cptr, ...)`**: Wait for a message from an Endpoint.

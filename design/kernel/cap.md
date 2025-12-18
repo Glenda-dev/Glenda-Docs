@@ -31,15 +31,14 @@ Capabilities point to specific kernel objects:
 ## 4. Capability Operations
 
 ### 4.1 Invocation
-The primary use of a cap.
-`syscall_invoke(cptr, args...)`
-*   If `cptr` points to an Endpoint -> Send IPC.
-*   If `cptr` points to a PageTable -> Map a page.
-*   If `cptr` points to a TCB -> Suspend/Resume.
+The primary use of a cap is **Invocation** via `sys_invoke`.
+*   The specific methods available depend on the object type.
+*   See [System Call Interface](syscall.md) for a complete list of methods for each object type.
 
 ### 4.2 Derivation (Minting)
 A thread can create a new capability from an existing one, potentially with reduced rights.
 *   **Mint**: Create a copy with a specific **Badge** or reduced permissions (e.g., Read-Write Frame -> Read-Only Frame).
+*   This is performed by invoking the `Mint` method on a **CNode** capability.
 
 ### 4.3 Transfer (Delegation)
 Capabilities can be transferred between CSpaces via IPC messages. This is the primary mechanism for authority delegation.
@@ -52,10 +51,11 @@ Capabilities can be transferred between CSpaces via IPC messages. This is the pr
         *   Looks up the capability in the sender's CSpace.
         *   Inserts a copy (or moves it) into the receiver's CSpace at the specified slot.
 *   **Grant**: The standard operation is to copy the capability. The sender retains access unless they explicitly delete it.
-*   **Use Case**: A server grants a client access to a shared memory buffer by sending a `Frame` cap. A client grants a server access to reply by sending a `Reply` cap (implicitly or explicitly).
+*   **Use Case**: A server grants a client access to a shared memory buffer by sending a `Frame` cap.
 
 ### 4.4 Revocation
 *   **Revoke**: A parent can delete all child capabilities derived from a specific capability. This allows reclaiming resources.
+*   This is performed by invoking the `Revoke` method on a **CNode** capability.
 
 ## 5. Badges
 
