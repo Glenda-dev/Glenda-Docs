@@ -53,7 +53,12 @@ Capabilities can be transferred between CSpaces via IPC messages. This is the pr
 *   **Grant**: The standard operation is to copy the capability. The sender retains access unless they explicitly delete it.
 *   **Use Case**: A server grants a client access to a shared memory buffer by sending a `Frame` cap.
 
-### 4.4 Revocation
+### 4.4 Revocation & Resource Reclamation
+*   **Reference Counting**: Glenda uses atomic reference counting for kernel objects (`TCB`, `Endpoint`, `CNode`).
+    *   Each object has a `ref_count` field.
+    *   Creating a new Capability (Mint/Copy) increments the count.
+    *   Deleting a Capability (Delete/Revoke) decrements the count.
+    *   When `ref_count` reaches 0, the object is logically destroyed (e.g., removed from scheduler queues).
 *   **Revoke**: A parent can delete all child capabilities derived from a specific capability. This allows reclaiming resources.
 *   This is performed by invoking the `Revoke` method on a **CNode** capability.
 
