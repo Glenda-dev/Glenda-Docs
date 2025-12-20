@@ -23,8 +23,11 @@ An IPC message is defined by the **UTCB (User Thread Control Block)** layout:
     *   **Label (Bits 16-63)**: A protocol-specific identifier. For example, `0xFFFF` is reserved for kernel-generated Fault messages.
 
 2.  **Message Registers (`mrs_regs`)**: 7 machine words (MR1-MR7) passed directly in CPU registers (e.g., `a1`-`a7` on RISC-V) during the trap.
-3.  **IPC Buffer**: A page-aligned buffer used for larger payloads. If `ipc_buffer_size` in the UTCB is non-zero, the kernel performs a `memcpy` from the sender's buffer to the receiver's buffer.
-4.  **Badge**: A machine word (passed in `t0`) that identifies the sender's capability or the interrupt source.
+3.  **Capability Transfer Fields**:
+    *   **`cap_transfer`**: The CPTR of the capability the sender wishes to transfer.
+    *   **`recv_window`**: The CPTR (CNode + Index) where the receiver wishes to store an incoming capability.
+4.  **IPC Buffer**: A page-aligned buffer used for larger payloads. If `ipc_buffer_size` in the UTCB is non-zero, the kernel performs a `memcpy` from the sender's buffer to the receiver's buffer.
+5.  **Badge**: A machine word (passed in `t0`) that identifies the sender's capability or the interrupt source.
 
 ## 4. IPC Operations
 
@@ -44,9 +47,18 @@ Endpoints are the rendezvous points for IPC.
 *   **`recv_queue`**: List of threads blocked while waiting for a message on this endpoint.
 *   **`pending_notifs`**: A FIFO of badges from asynchronous notifications (e.g., IRQs) that haven't been received yet.
 
-## 6. Capability Delegation (Planned)
+## 6. Capability Delegation
 
-A message can transfer a Capability from the sender's CSpace to the receiver's CSpace.
-*   **Sender**: Specifies the CPTR of the capability to grant in the UTCB.
-*   **Receiver**: Specifies a destination slot in its CSpace.
-*   **Kernel**: During the Rendezvous, the kernel moves/copies the capability between CNodes, provided the sender has `Grant` rights.
+A message can transfer a Capability from the sender's CSpace to the receiver's CSpace. This is essential for resource management and security delegation.
+
+*   **Sender**:
+    *   Sets the `HasCap` flag in the `MsgTag`.
+    *   Places the CPTR of the capability to be sent in `utcb.cap_transfer`.
+    *   Must have `Grant` rights on the capability.
+*   **Receiver**:
+    *   Specifies a destination slot in its CSpace via `utcb.recv_window`.
+*   **Kernel**:
+    *   During the Rendezvous (in `copy_msg`), the kernel looks up the capability in the sender's CSpace.
+    *   It verifies the `Grant` right.
+    *   It inserts the capability into the receiver's CSpace at the specified `recv_window`.
+    *   The capability is effectively "moved" or "copied" depending on the specific object type and derivation rules.

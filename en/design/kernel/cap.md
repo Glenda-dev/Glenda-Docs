@@ -44,12 +44,15 @@ A thread can create a new capability from an existing one, potentially with redu
 Capabilities can be transferred between CSpaces via IPC messages. This is the primary mechanism for authority delegation.
 
 *   **Mechanism**:
-    1.  **Sender**: Places the CPTR of the capability to be transferred into the **UTCB** (specifically in the IPC message header or a dedicated "Cap Transfer" area).
-    2.  **Receiver**: Specifies a "Receive Window" (a CNode and an index) in its own **UTCB** where the incoming capability should be stored.
+    1.  **Sender**:
+        *   Sets the `HasCap` flag in the `MsgTag`.
+        *   Places the CPTR of the capability to be transferred into `utcb.cap_transfer`.
+        *   Must have the **`Grant`** right on the capability being transferred.
+    2.  **Receiver**: Specifies a "Receive Window" (a CPTR to a slot) in its own `utcb.recv_window` where the incoming capability should be stored.
     3.  **Kernel**:
-        *   Verifies the sender has the authority to transfer the cap (e.g., `Grant` right on the Endpoint).
-        *   Looks up the capability in the sender's CSpace.
-        *   Inserts a copy (or moves it) into the receiver's CSpace at the specified slot.
+        *   During the IPC rendezvous, the kernel looks up the capability in the sender's CSpace.
+        *   It verifies the `Grant` right on the capability.
+        *   It inserts the capability into the receiver's CSpace at the specified slot.
 *   **Grant**: The standard operation is to copy the capability. The sender retains access unless they explicitly delete it.
 *   **Use Case**: A server grants a client access to a shared memory buffer by sending a `Frame` cap.
 

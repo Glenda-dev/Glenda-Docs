@@ -48,8 +48,14 @@ pub struct TCB {
 ```
 
 ### 4.2 Fault Message Format (in UTCB)
-| Offset | Content | Description |
-|--------|---------|-------------|
-| 0      | scause  | Exception cause bits |
-| 8      | stval   | Faulting address or instruction |
-| 16     | sepc    | Program counter where fault occurred |
+
+When a fault occurs, the kernel populates the UTCB of the faulting thread as follows:
+
+| Field | Content | Description |
+|-------|---------|-------------|
+| `msg_tag` | `0xFFFF` | Label indicating a Fault IPC |
+| `mrs_regs[0]` | `scause` | Exception cause bits |
+| `mrs_regs[1]` | `stval` | Faulting address or instruction |
+| `mrs_regs[2]` | `sepc` | Program counter where fault occurred |
+
+The thread then enters `BlockedSend` state on its `fault_handler` endpoint.
