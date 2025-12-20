@@ -6,37 +6,47 @@ In Glenda's microkernel architecture, Inter-Process Communication (IPC) is the f
 
 ## 2. Design Principles
 
-*   **Synchronous by Default**: To minimize buffering overhead and complexity in the kernel, standard IPC is synchronous. The sender blocks until the receiver is ready, and the receiver blocks until a message arrives. Handover is direct.
-*   **Zero-Copy (where possible)**: Short messages are passed purely in registers. Longer messages use shared memory buffers or direct copy between address spaces if necessary.
-*   **Performance Critical**: IPC is the "hot path" of the kernel.
+*   **Synchronous (Rendezvous)**: Standard IPC is synchronous. The sender blocks until a receiver is ready, and vice versa. Data is copied directly between threads during the handshake.
+*   **Asynchronous Notifications**: Used for hardware interrupts and simple signaling. These are non-blocking and only carry a "Badge" (identity/event code) without a data payload.
+*   **Zero-Copy for Short Messages**: The most frequent messages are passed entirely through CPU registers.
+*   **Capability-Based**: IPC is performed by invoking capabilities to **Endpoints**.
 
 ## 3. Message Structure
 
-An IPC message consists of:
+An IPC message is defined by the **UTCB (User Thread Control Block)** layout:
 
-1.  **Message Tag (MR0)**: Describes the message protocol, length, and flags. Passed in a register.
-2.  **Short Message (Registers)**: Up to 8 machine words passed directly in CPU registers (e.g., `a0`-`a7` on RISC-V). This is sufficient for most system calls and simple protocols.
-3.  **Extended Message (UTCB)**: If the message exceeds the register count, the remaining words are stored in the thread's UTCB (Message Registers MR8+). The kernel copies these from the sender's UTCB to the receiver's UTCB.
-4.  **Capabilities (Optional)**: A message can transfer a Capability from the sender's CSpace to the receiver's CSpace (Cap Delegation).
-    *   **Sender**: Writes a **Cap Transfer Descriptor** (CTD) into its UTCB. The CTD contains the CPTR of the cap to send.
-    *   **Receiver**: Writes a **Receive Window Descriptor** (RWD) into its UTCB. The RWD specifies the CNode and index where the received cap should be placed.
-    *   **Kernel**: Validates the transfer (checking for `Grant` rights) and performs the copy/move operation during the IPC handshake.
+1.  **Message Tag (`msg_tag`)**: A single word describing the message protocol, label, and the number of words in the message.
+    *   **Length (Bits 0-3)**: Number of message registers (`mrs_regs`) used (0 to 7).
+    *   **Flags (Bits 4-15)**:
+        *   Bit 4: `HasCap` - Indicates a capability is being transferred.
+        *   Bit 5: `HasBuffer` - Indicates the IPC buffer is used for large payloads.
+    *   **Label (Bits 16-63)**: A protocol-specific identifier. For example, `0xFFFF` is reserved for kernel-generated Fault messages.
+
+2.  **Message Registers (`mrs_regs`)**: 7 machine words (MR1-MR7) passed directly in CPU registers (e.g., `a1`-`a7` on RISC-V) during the trap.
+3.  **IPC Buffer**: A page-aligned buffer used for larger payloads. If `ipc_buffer_size` in the UTCB is non-zero, the kernel performs a `memcpy` from the sender's buffer to the receiver's buffer.
+4.  **Badge**: A machine word (passed in `t0`) that identifies the sender's capability or the interrupt source.
 
 ## 4. IPC Operations
 
-The system call interface provides the following primitives:
+### 4.1 Synchronous Send/Receive
+*   **`sys_send(dest_cptr)`**: Blocks the caller until a receiver is waiting on the target Endpoint.
+*   **`sys_recv(src_cptr)`**: Blocks the caller until a sender arrives at the target Endpoint or a pending notification is available.
+*   **`sys_call(dest_cptr)`**: (Planned) A combined Send-then-Receive operation that provides an implicit Reply capability for the server to respond.
 
-*   **`Send(dest_cptr, msg)`**:
-    *   Blocking send.
-    *   Blocks until `dest` is ready to receive.
-*   **`Recv(src_cptr, buf)`**:
-    *   Blocking receive.
-    *   Blocks until a message arrives from `src` (or any open Endpoint).
+### 4.2 Asynchronous Notify
+*   **`notify(endpoint, badge)`**: A kernel-internal or user-space operation that delivers a badge to an Endpoint without blocking. If no receiver is waiting, the badge is queued in the Endpoint's `pending_notifs` list.
 
 ## 5. Endpoints
 
-IPC is not directed at "Thread IDs" but at **Endpoints**.
-*   An **Endpoint** is a kernel object that acts as a mailbox or rendezvous point.
-*   Threads holding a `Send` capability to an Endpoint can send messages.
-*   Threads holding a `Recv` capability to an Endpoint can listen for messages.
-*   This allows multiple clients to talk to a single server without knowing the server's internal thread ID.
+Endpoints are the rendezvous points for IPC.
+
+*   **`send_queue`**: List of threads blocked while trying to send to this endpoint.
+*   **`recv_queue`**: List of threads blocked while waiting for a message on this endpoint.
+*   **`pending_notifs`**: A FIFO of badges from asynchronous notifications (e.g., IRQs) that haven't been received yet.
+
+## 6. Capability Delegation (Planned)
+
+A message can transfer a Capability from the sender's CSpace to the receiver's CSpace.
+*   **Sender**: Specifies the CPTR of the capability to grant in the UTCB.
+*   **Receiver**: Specifies a destination slot in its CSpace.
+*   **Kernel**: During the Rendezvous, the kernel moves/copies the capability between CNodes, provided the sender has `Grant` rights.
