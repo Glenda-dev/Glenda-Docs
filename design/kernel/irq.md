@@ -30,17 +30,39 @@ Kernel drivers are removed. Hardware interrupts must reach user-space drivers vi
 2.  **Driver Startup**: The Root Task spawns a driver (e.g., UART Driver).
 3.  **Delegation**: The Root Task grants the specific `IrqHandler` (e.g., IRQ 10) to the UART Driver.
 4.  **Binding**:
-    *   The UART Driver creates an `Endpoint` object.
-    *   The UART Driver invokes `IrqHandler.SetEndpoint(EndpointCap)`.
-    *   The kernel records this mapping: `IRQ 10 -> Endpoint A`.
+    *   The UART Driver creates an `Endpoint` or `Notification` object.
+    *   The UART Driver invokes `IrqHandler.SetNotification(Cap)`.
+    *   The kernel records this mapping in a global `IRQ_TABLE`.
 
 ### 3.3 Handling Flow
 1.  **Hardware**: Interrupt fires.
-2.  **Kernel**:
-    *   Masks the interrupt at the controller (PLIC/APIC).
-    *   Looks up the bound `Endpoint` object.
-    *   Sends a message to the `Endpoint` (non-blocking or special kernel message).
+2.  **Kernel (Trap)**:
+    *   **Claim**: Kernel claims the IRQ from PLIC.
+    *   **Mask**: Kernel masks the interrupt at the PLIC to prevent interrupt storms.
+    *   **Notify**: Kernel sends a non-blocking signal/message to the bound `Endpoint`.
+    *   **Complete**: Kernel signals "Complete" to PLIC (but the line remains masked).
 3.  **User Space (Driver)**:
-    *   Thread wakes up from `sys_recv(Endpoint)`.
-    *   Reads device registers, processes data.
-    *   Invokes `IrqHandler.Ack()` to unmask the interrupt.
+    *   Thread wakes up from `sys_recv`.
+    *   Processes hardware (e.g., reads UART RX FIFO).
+    *   Invokes `IrqHandler.Ack()`.
+4.  **Kernel (Syscall)**:
+    *   **Unmask**: Kernel unmasks the interrupt at the PLIC, allowing it to fire again.
+
+## 4. Data Structures
+
+### 4.1 IrqSlot
+A kernel-internal structure representing a hardware IRQ line.
+```rust
+struct IrqSlot {
+    notification: Option<Capability>, // Bound Endpoint/Notification
+    enabled: bool,                    // Current mask state
+}
+```
+
+### 4.2 IrqHandler Capability
+The user-facing handle for an IRQ.
+*   **Object**: `CapType::IrqHandler { irq: usize }`
+*   **Methods**:
+    *   `SetNotification(cap)`: Bind an IPC object to this IRQ.
+    *   `Ack()`: Unmask the IRQ after processing.
+    *   `Clear()`: Unbind the notification.
