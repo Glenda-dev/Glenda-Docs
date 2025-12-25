@@ -13,8 +13,8 @@ There is only one entry point to the kernel via the `ecall` instruction. The ker
 | Register | Name | Description |
 | :--- | :--- | :--- |
 | **`a0`** | `cptr` | The Capability Pointer to the target kernel object. |
-| **`a1`** | `method` | Method ID |
-| **`a2 - a7`** | `args / MRs` | Message Registers (MR0-MR5) for arguments or IPC data. |
+| **`a7`** | `method` | Method ID |
+| **`a1 - a6`** | `args / MRs` | Message Registers (MR0-MR5) for arguments or IPC data. |
 
 ## 3. Kernel Object Methods
 
