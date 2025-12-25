@@ -26,6 +26,12 @@ The microkernel is responsible for the following minimal set of features:
 ### 3.1 Capability System (CSpace)
 Security and resource management are based on Capabilities. A Capability is a kernel-protected token that refers to a kernel object with specific access rights.
 
+*   **Lifecycle Management**: Kernel objects are managed via **Reference Counting**. The `Capability` structure implements `Clone` (increment ref) and `Drop` (decrement ref). When the count reaches zero, the underlying physical memory is reclaimed.
+*   **Untyped Memory**: All physical memory is initially represented as `Untyped` capabilities. Kernel objects (TCB, CNode, etc.) are created by "retyping" `Untyped` memory. This unifies memory management with the capability system.
+*   **Badge**: A 64-bit immutable identifier attached to a capability during a `Mint` operation.
+    *   **Identity**: Servers use badges to identify clients.
+    *   **Immutability**: Once a badge is set, it cannot be modified or removed by the holder.
+    *   **Notification**: For notification objects, badges act as bitmasks that are ORed together upon signaling.
 *   **Objects**: TCB (Thread Control Block), Endpoint (IPC Port), Frame (Physical Page), Untyped (Free Memory), IrqHandler, PageTable, CNode.
 *   **CSpace**: Each process has a Capability Space (CSpace) storing its capabilities.
 *   **Invocation**: System calls are performed by invoking a capability (e.g., `sys_invoke(cptr, args)`).
@@ -34,6 +40,7 @@ Security and resource management are based on Capabilities. A Capability is a ke
 IPC is the only way for threads to interact.
 *   **Synchronous**: IPC is typically synchronous to avoid buffering overhead.
 *   **Message Passing**: Short messages are passed via registers; extended messages and capabilities are passed via the **UTCB** (User Thread Control Block).
+*   **Badge Passing**: During IPC, the kernel extracts the badge from the sender's capability and injects it into the receiver's context (e.g., register `t0`). This provides a secure, kernel-verified identity.
 *   **Endpoints**: IPC is directed towards Endpoint objects, not threads directly.
 
 ### 3.3 Exception Handling (Application Interrupts)
@@ -48,8 +55,19 @@ The kernel does not handle page faults or other application exceptions internall
 ### 3.4 Root Task
 The **Root Task** is the first user-space process started by the kernel.
 *   It receives capabilities for all available system resources (all free memory, all IO ports/IRQs).
+*   **CSpace Layout**: The Root Task has a fixed initial CSpace layout:
+    *   Slot 0: Root CNode Capability
+    *   Slot 1: Root VSpace (PageTable) Capability
+    *   Slot 2: Root TCB Capability
+    *   Slot 3: Root UTCB Frame Capability
+    *   Slot 4+: Untyped Memory Capabilities
 *   It acts as the initial Resource Manager and IRQHandler.
 *   It is responsible for bootstrapping the rest of the user-space environment (starting drivers, FS server, shell).
+
+### 3.5 Kernel Abstractions as TCBs
+The kernel itself uses the TCB abstraction for internal management:
+*   **Idle Thread**: A lowest-priority TCB per CPU that runs when no other threads are ready.
+*   **Interrupt Threads**: Hardware interrupts can be abstracted as high-priority kernel threads that send IPC messages to user-space handlers, unifying scheduling and interrupt handling.
 
 ## 4. Boot Process
 

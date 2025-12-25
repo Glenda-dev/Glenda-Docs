@@ -20,7 +20,7 @@ Capabilities point to specific kernel objects:
 
 | Object Type | Description |
 | :--- | :--- |
-| **Untyped** | A region of free physical memory. Can be "retyped" into other objects. |
+| **Untyped** | The root of all physical memory. Represents a contiguous block of free memory. Can be "retyped" into specific kernel objects. |
 | **TCB** | Thread Control Block. Represents a thread. Invoking it allows suspending/resuming/configuring the thread. |
 | **Endpoint** | IPC Port. Used for message passing. |
 | **Frame** | A physical memory page (e.g., 4KB). Can be mapped into a VSpace. |
@@ -35,12 +35,22 @@ The primary use of a cap is **Invocation** via `sys_invoke`.
 *   The specific methods available depend on the object type.
 *   See [System Call Interface](syscall.md) for a complete list of methods for each object type.
 
-### 4.2 Derivation (Minting)
+### 4.2 Retyping (Object Creation)
+The **Retype** operation is the only mechanism for creating new kernel objects. It transforms a portion of an `Untyped` memory region into one or more specific kernel objects.
+
+*   **Mechanism**:
+    1.  The user invokes the `Retype` method on an **Untyped** capability.
+    2.  The kernel verifies that the requested memory range is within the `Untyped` region and is currently free.
+    3.  The kernel carves out the memory, initializes the new objects (e.g., zeroing a PageTable), and creates the corresponding capabilities.
+    4.  The new capabilities are inserted into the user's CSpace.
+*   **Derivation**: The new objects are considered "children" of the original `Untyped` capability in the **Capability Derivation Tree (CDT)**.
+
+### 4.3 Derivation (Minting)
 A thread can create a new capability from an existing one, potentially with reduced rights.
 *   **Mint**: Create a copy with a specific **Badge** or reduced permissions (e.g., Read-Write Frame -> Read-Only Frame).
 *   This is performed by invoking the `Mint` method on a **CNode** capability.
 
-### 4.3 Transfer (Delegation)
+### 4.4 Transfer (Delegation)
 Capabilities can be transferred between CSpaces via IPC messages. This is the primary mechanism for authority delegation.
 
 *   **Mechanism**:
@@ -56,14 +66,19 @@ Capabilities can be transferred between CSpaces via IPC messages. This is the pr
 *   **Grant**: The standard operation is to copy the capability. The sender retains access unless they explicitly delete it.
 *   **Use Case**: A server grants a client access to a shared memory buffer by sending a `Frame` cap.
 
-### 4.4 Revocation & Resource Reclamation
-*   **Reference Counting**: Glenda uses atomic reference counting for kernel objects (`TCB`, `Endpoint`, `CNode`).
-    *   Each object has a `ref_count` field.
-    *   Creating a new Capability (Mint/Copy) increments the count.
-    *   Deleting a Capability (Delete/Revoke) decrements the count.
-    *   When `ref_count` reaches 0, the object is logically destroyed (e.g., removed from scheduler queues).
-*   **Revoke**: A parent can delete all child capabilities derived from a specific capability. This allows reclaiming resources.
-*   This is performed by invoking the `Revoke` method on a **CNode** capability.
+### 4.5 Revocation & Resource Reclamation
+Glenda ensures memory safety and resource accounting through a combination of **Reference Counting** and the **Capability Derivation Tree (CDT)**.
+
+*   **Reference Counting**: Every kernel object (TCB, CNode, Endpoint, etc.) is reference-counted.
+    *   **Increment**: Creating a new capability to an existing object (via `Copy` or `Mint`) increments the object's reference count.
+    *   **Decrement**: Deleting a capability (via `Delete` or `Revoke`) decrements the count.
+    *   **Destruction**: When the count reaches zero, the object is destroyed. If the object was created from `Untyped` memory, that memory is logically returned to the parent `Untyped` region or marked as free for future retyping.
+*   **Capability Derivation Tree (CDT)**: The CDT tracks the "parent-child" relationship between capabilities.
+    *   When an `Untyped` region is retyped, the resulting objects are children of that `Untyped` capability.
+    *   When a capability is `Minted`, the new capability is a child of the original.
+*   **Revoke**: The `Revoke` operation allows a user to recursively delete all capabilities derived from a target capability.
+    *   If `Revoke` is called on an `Untyped` capability, all objects created from that memory are destroyed, and the memory is reclaimed.
+    *   This ensures that a resource provider can always take back resources it has delegated to a child process.
 
 ## 5. Badges
 

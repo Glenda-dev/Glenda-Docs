@@ -4,7 +4,7 @@
 
 In Glenda's microkernel architecture, the concept of a "Process" is decomposed into orthogonal kernel objects to ensure policy-mechanism separation. The kernel manages **Threads** (execution units), while **Address Spaces** (VSpace) and **Capability Spaces** (CSpace) are resources that threads utilize.
 
-The core kernel object representing a thread of execution is the **TCB (Thread Control Block)**.
+The core kernel object representing a thread of execution is the **TCB (Thread Control Block)**. This abstraction is used for both user-space processes and internal kernel tasks (e.g., Idle thread, Interrupt handlers).
 
 ## 2. Thread Lifecycle
 
@@ -57,6 +57,9 @@ The TCB is a kernel-only structure. It contains the minimal state required to ma
 *   **Priority**: Scheduling priority (0-255).
 *   **Time Slice**: Remaining time quantum.
 *   **State**: Current lifecycle state (enum).
+*   **Privileged**: Boolean indicating if the thread is a **Kernel Thread**.
+    *   If `true`, the thread runs in **Supervisor Mode (S-Mode)** and uses the kernel's address space.
+    *   If `false`, the thread runs in **User Mode (U-Mode)** and uses its assigned `VSpace`.
 *   **CSpace Root**: Capability to the root `CNode` of the thread's capability space.
 *   **VSpace Root**: Capability to the root `PageTable` of the thread's address space.
 *   **UTCB Pointer**: Kernel virtual address of the User Thread Control Block.
@@ -116,6 +119,38 @@ Threads do not "exit" in the traditional sense; they simply stop running or are 
     *   When a TCB is destroyed (via `Revoke` on the Untyped memory that created it), the kernel ensures it is removed from scheduler queues.
     *   Capabilities held in the thread's CSpace are *not* automatically destroyed unless the CNode itself is destroyed.
     *   The VSpace is *not* automatically destroyed; it is merely detached.
+
+### 4.5 Kernel Threads & Context Switching
+
+Glenda treats kernel tasks as special TCBs with the `privileged` flag set to `true`.
+
+#### 4.5.1 Kernel TCB Characteristics
+*   **Privilege Level**: Always executes in S-Mode.
+*   **Address Space**: Typically shares the kernel's global page table.
+*   **Stack**: Uses a dedicated kernel stack.
+*   **CSpace**: May have a restricted or null CSpace as it operates with kernel authority.
+
+#### 4.5.2 Switching Logic
+The scheduler performs context switches based on the `privileged` flag of the target TCB:
+
+1.  **User -> User**:
+    *   Save current U-Mode registers to current TCB.
+    *   Switch `satp` to target VSpace.
+    *   Restore target U-Mode registers.
+    *   `sret` to U-Mode.
+2.  **User -> Kernel**:
+    *   Trap occurs (System Call/Interrupt).
+    *   Save U-Mode state to current TCB.
+    *   Switch to target Kernel TCB stack.
+    *   Restore Kernel TCB registers.
+    *   Continue execution in S-Mode.
+3.  **Kernel -> User**:
+    *   Save Kernel TCB state.
+    *   Switch `satp` to target VSpace.
+    *   Restore target U-Mode state.
+    *   `sret` to U-Mode.
+4.  **Kernel -> Kernel**:
+    *   Directly save/restore S-Mode registers (callee-saved) and switch stacks. No `satp` switch is required if they share the kernel address space.
 
 ## 5. Capability Interface
 
