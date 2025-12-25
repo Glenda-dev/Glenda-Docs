@@ -11,28 +11,54 @@
 
 ## 2. Core Primitives
 
-### 2.1 Capability Pointer (CPtr)
-A `CPtr` is an integer index into the thread's CSpace.
+### 2.1 Capability Pointer (CapPtr)
+A `CapPtr` is a transparent wrapper around a `usize`, representing an index into the thread's CSpace.
 
 ```rust
 #[repr(transparent)]
-pub struct CPtr(pub usize);
+pub struct CapPtr(pub usize);
 ```
 
 ### 2.2 Message Tag (MsgTag)
-Used to describe the structure of an IPC message.
+Used to describe the structure of an IPC message. It encodes the label, message length, and flags (like `HAS_CAP`).
+
+```rust
+pub struct MsgTag(pub usize);
+```
+
+### 2.3 User Thread Control Block (UTCB)
+The UTCB is mapped at a fixed virtual address (`0x8000_0000`). It contains message registers and transfer descriptors.
 
 ```rust
 #[repr(C)]
-pub struct MsgTag {
-    pub label: usize,
-    pub msg_len: u8,
-    pub cap_transfer: bool,
-    // ... other flags
+pub struct UTCB {
+    pub msg_tag: MsgTag,
+    pub mrs_regs: [usize; 7],
+    pub cap_transfer: usize,
+    pub recv_window: usize,
+    pub tls: usize,
+    pub ipc_buffer_size: usize,
 }
 ```
 
-## 3. C Language Interface
+## 3. Rust API
+
+### 3.1 System Calls
+The library provides low-level wrappers for RISC-V `ecall`:
+- `sys_invoke(cptr, method, arg0..arg5)`
+- `sys_send(cptr, msg_info)`
+- `sys_recv(cptr)`
+
+### 3.2 Object-Oriented Invocation
+`CapPtr` provides methods for common kernel object operations:
+
+- **TCB**: `tcb_configure`, `tcb_set_priority`, `tcb_resume`, `tcb_suspend`.
+- **CNode**: `cnode_mint`, `cnode_copy`, `cnode_delete`, `cnode_revoke`.
+- **Untyped**: `untyped_retype`.
+- **PageTable**: `pagetable_map`, `pagetable_unmap`.
+- **IPC**: `send`, `recv`.
+
+## 4. C Language Interface
 
 `libglenda-rs` exports a set of C-compatible functions using `#[no_mangle]`. These are intended to be used by C applications via a generated `glenda.h` header.
 
@@ -42,14 +68,16 @@ The UTCB is a page of memory shared between the kernel and the user thread. It i
 
 ```c
 typedef struct {
-    uintptr_t mr[64];       // Message Registers
+    uintptr_t msg_tag;      // Message Tag
+    uintptr_t mrs_regs[7];  // Message Registers
     uintptr_t cap_transfer; // Slot for capability transfer
-    uintptr_t badge;        // Received badge
-    // ...
+    uintptr_t recv_window;  // Receive window descriptor
+    uintptr_t tls;          // TLS pointer
+    uintptr_t ipc_buffer_size;
 } glenda_utcb_t;
 
 // Accessing the UTCB
-extern glenda_utcb_t* glenda_get_utcb(void);
+glenda_utcb_t* glenda_get_utcb(void);
 ```
 
 ### 3.2 Basic Types (C)
@@ -69,15 +97,17 @@ typedef struct {
 #### `glenda_syscall_invoke`
 Invokes a method on a capability.
 
-```rust
-#[no_mangle]
-pub extern "C" fn glenda_syscall_invoke(
-    cptr: usize,
-    method: usize,
-    arg0: usize,
-    arg1: usize,
-    arg2: usize,
-) -> isize;
+```c
+uintptr_t glenda_syscall_invoke(
+    uintptr_t cptr,
+    uintptr_t method,
+    uintptr_t arg0,
+    uintptr_t arg1,
+    uintptr_t arg2,
+    uintptr_t arg3,
+    uintptr_t arg4,
+    uintptr_t arg5
+);
 ```
 
 #### `glenda_ipc_send`
@@ -129,9 +159,12 @@ All functions return a signed integer where negative values represent error code
 | Error Code | Description |
 | :--- | :--- |
 | `0` | Success |
-| `-1` | Invalid Capability |
-| `-2` | Permission Denied |
-| `-3` | Out of Memory |
+| `1` | Invalid Capability |
+| `2` | Permission Denied |
+| `3` | Invalid Endpoint |
+| `4` | Invalid Object Type |
+| `5` | Invalid Method |
+| `8` | Out of Memory (Untyped OOM) |
 
 ## 7. Header Generation
 
