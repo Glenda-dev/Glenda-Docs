@@ -62,7 +62,8 @@ The TCB is a kernel-only structure. It contains the minimal state required to ma
     *   If `false`, the thread runs in **User Mode (U-Mode)** and uses its assigned `VSpace`.
 *   **CSpace Root**: Capability to the root `CNode` of the thread's capability space.
 *   **VSpace Root**: Capability to the root `PageTable` of the thread's address space.
-*   **UTCB Pointer**: Kernel virtual address of the User Thread Control Block.
+*   **UTCB Frame**: Capability to the physical frame used for the UTCB.
+*   **UTCB Pointer**: Virtual address of the User Thread Control Block in the thread's address space.
 *   **Fault Handler**: Capability (Endpoint) to send fault IPCs to.
 
 ### 3.2 User Thread Control Block (UTCB)
@@ -86,8 +87,8 @@ Thread creation is a user-space responsibility (usually performed by a root task
 1.  **Allocation**: A parent thread invokes an `Untyped` capability to **Retype** a portion of memory into a new `TCB` object.
 2.  **Address Space Setup**: The parent assigns a VSpace (PageTable cap) to the TCB.
 3.  **Capability Space Setup**: The parent assigns a CSpace (CNode cap) to the TCB.
-4.  **UTCB Setup**: The parent maps a frame into the new thread's VSpace to serve as the UTCB and registers its address in the TCB.
-5.  **Configuration**: The parent invokes the `TCB` capability to set the initial Instruction Pointer (IP), Stack Pointer (SP), and Priority.
+4. **UTCB Setup**: The parent allocates a frame to serve as the UTCB and maps it into the new thread's VSpace.
+5. **Configuration**: The parent invokes the `TCB` capability to bind the CSpace, VSpace, UTCB frame, and UTCB virtual address. It also sets the initial Instruction Pointer (IP), Stack Pointer (SP), and Priority.
 6.  **Activation**: The parent invokes `TCB::Resume()`, transitioning the thread from **Inactive** to **Ready**.
 
 ### 4.2 Execution & Scheduling

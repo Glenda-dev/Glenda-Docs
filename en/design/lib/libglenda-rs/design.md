@@ -52,7 +52,7 @@ The library provides low-level wrappers for RISC-V `ecall`:
 ### 3.2 Object-Oriented Invocation
 `CapPtr` provides methods for common kernel object operations:
 
-- **TCB**: `tcb_configure`, `tcb_set_priority`, `tcb_resume`, `tcb_suspend`.
+- **TCB**: `tcb_configure(cspace, vspace, utcb_vaddr, fault_ep, utcb_frame)`, `tcb_set_priority`, `tcb_resume`, `tcb_suspend`.
 - **CNode**: `cnode_mint`, `cnode_copy`, `cnode_delete`, `cnode_revoke`.
 - **Untyped**: `untyped_retype`.
 - **PageTable**: `pagetable_map`, `pagetable_unmap`.
@@ -146,11 +146,13 @@ The library provides a `VSpace` abstraction for managing the process's address s
 
 ## 5. Runtime & Startup
 
-`libglenda-rs` includes the `crt0` (C Runtime 0) logic:
-1.  Entry point from kernel.
-2.  Initialization of the `UTCB` (User Thread Control Block) pointer.
-3.  Setup of the stack and heap.
-4.  Calling `main`.
+`libglenda-rs` includes the `crt0` (C Runtime 0) logic and core Rust runtime support:
+1.  **Target**: Compiled for `riscv64gc-unknown-none-elf` to run directly on the microkernel.
+2.  **Panic Handler**: Provides a default `#[panic_handler]` that enters an infinite loop (or eventually sends a fault IPC).
+3.  **Entry Point**: Entry point from kernel.
+4.  **Initialization**: Initialization of the `UTCB` (User Thread Control Block) pointer.
+5.  **Stack & Heap**: Setup of the stack and heap.
+6.  **Main**: Calling `main`.
 
 ## 6. Error Handling
 

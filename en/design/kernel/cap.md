@@ -70,8 +70,9 @@ Capabilities can be transferred between CSpaces via IPC messages. This is the pr
 Glenda ensures memory safety and resource accounting through a combination of **Reference Counting** and the **Capability Derivation Tree (CDT)**.
 
 *   **Reference Counting**: Every kernel object (TCB, CNode, Endpoint, etc.) is reference-counted.
-    *   **Increment**: Creating a new capability to an existing object (via `Copy` or `Mint`) increments the object's reference count.
-    *   **Decrement**: Deleting a capability (via `Delete` or `Revoke`) decrements the count.
+    *   **Capability Ownership**: In the Rust kernel, the `Capability` struct implements `Clone` and `Drop`.
+    *   **Increment**: Cloning a `Capability` (via `Clone` or when passing to methods like `insert`) increments the underlying object's reference count.
+    *   **Decrement**: Dropping a `Capability` (via `Drop` or when a CNode slot is overwritten) decrements the count.
     *   **Destruction**: When the count reaches zero, the object is destroyed. If the object was created from `Untyped` memory, that memory is logically returned to the parent `Untyped` region or marked as free for future retyping.
 *   **Capability Derivation Tree (CDT)**: The CDT tracks the "parent-child" relationship between capabilities.
     *   When an `Untyped` region is retyped, the resulting objects are children of that `Untyped` capability.
@@ -85,5 +86,6 @@ Glenda ensures memory safety and resource accounting through a combination of **
 Badges are a crucial feature for server implementation.
 *   A server holds the "Master" Receive Cap for an Endpoint.
 *   The server "Mints" a Send Cap with a unique **Badge** (an integer tag) for each client.
-*   When Client A sends a message using its Badged Cap, the Server receives the message along with the Badge value.
+*   **Immutable Identity**: Once a capability is badged, its badge cannot be modified. This ensures that a client cannot forge its identity by re-badging a capability it received.
+*   **Automatic Delivery**: When a thread sends a message using a badged capability, the kernel automatically extracts the badge and delivers it to the receiver (typically via a designated register like `t0`).
 *   **Result**: The server knows exactly which client sent the message, without the kernel needing a global "Client ID" concept. The Badge *is* the identity.
