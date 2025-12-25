@@ -27,9 +27,17 @@ An IPC message is defined by the **UTCB (User Thread Control Block)** layout:
     *   **`cap_transfer`**: The CPTR of the capability the sender wishes to transfer.
     *   **`recv_window`**: The CPTR (CNode + Index) where the receiver wishes to store an incoming capability.
 4.  **IPC Buffer**: A page-aligned buffer used for larger payloads. If `ipc_buffer_size` in the UTCB is non-zero, the kernel performs a `memcpy` from the sender's buffer to the receiver's buffer.
-5.  **Badge**: A machine word (passed in `t0`) that identifies the sender's capability or the interrupt source.
+5.  **Badge**: A machine word (passed in `t0`) that identifies the sender's capability or the interrupt source. The kernel automatically extracts the badge from the capability used to invoke the IPC operation.
 
-## 4. IPC Operations
+## 4. User Thread Control Block (UTCB)
+
+The UTCB is a critical shared memory region between the kernel and user space.
+
+*   **Capability-Managed**: The physical frame backing the UTCB is managed as a **Frame Capability** within the TCB. This allows the UTCB to be delegated or shared between threads using standard IPC capability transfer.
+*   **Fixed Mapping**: Each thread has its UTCB mapped at a fixed virtual address (e.g., `0x8000_0000`) in its VSpace.
+*   **Lifecycle**: The UTCB's lifecycle is tied to the TCB's reference count. When a TCB is destroyed, its UTCB capability is dropped, potentially reclaiming the physical memory.
+
+## 5. IPC Operations
 
 ### 4.1 Synchronous Send/Receive
 *   **`sys_send(dest_cptr)`**: Blocks the caller until a receiver is waiting on the target Endpoint.
@@ -39,7 +47,7 @@ An IPC message is defined by the **UTCB (User Thread Control Block)** layout:
 ### 4.2 Asynchronous Notify
 *   **`notify(endpoint, badge)`**: A kernel-internal or user-space operation that delivers a badge to an Endpoint without blocking. If no receiver is waiting, the badge is queued in the Endpoint's `pending_notifs` list.
 
-## 5. Endpoints
+## 6. Endpoints
 
 Endpoints are the rendezvous points for IPC.
 
@@ -47,7 +55,7 @@ Endpoints are the rendezvous points for IPC.
 *   **`recv_queue`**: List of threads blocked while waiting for a message on this endpoint.
 *   **`pending_notifs`**: A FIFO of badges from asynchronous notifications (e.g., IRQs) that haven't been received yet.
 
-## 6. Capability Delegation
+## 7. Capability Delegation
 
 A message can transfer a Capability from the sender's CSpace to the receiver's CSpace. This is essential for resource management and security delegation.
 
