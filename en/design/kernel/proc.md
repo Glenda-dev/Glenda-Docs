@@ -57,6 +57,10 @@ The TCB is a kernel-only structure. It contains the minimal state required to ma
 *   **Priority**: Scheduling priority (0-255).
 *   **Time Slice**: Remaining time quantum.
 *   **State**: Current lifecycle state (enum).
+*   **Intrusive Links**: `prev` and `next` pointers to link the TCB into scheduler or IPC queues without dynamic allocation.
+*   **IPC State**:
+    *   `ipc_badge`: The badge value to be delivered to the receiver.
+    *   `ipc_cap`: The capability being transferred during IPC.
 *   **Privileged**: Boolean indicating if the thread is a **Kernel Thread**.
     *   If `true`, the thread runs in **Supervisor Mode (S-Mode)** and uses the kernel's address space.
     *   If `false`, the thread runs in **User Mode (U-Mode)** and uses its assigned `VSpace`.

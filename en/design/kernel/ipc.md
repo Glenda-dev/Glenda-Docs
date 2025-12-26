@@ -49,11 +49,13 @@ The UTCB is a critical shared memory region between the kernel and user space.
 
 ## 6. Endpoints
 
-Endpoints are the rendezvous points for IPC.
+Endpoints are the rendezvous points for IPC. To avoid dynamic memory allocation, they use intrusive linked lists and bitwise notification words.
 
-*   **`send_queue`**: List of threads blocked while trying to send to this endpoint.
-*   **`recv_queue`**: List of threads blocked while waiting for a message on this endpoint.
-*   **`pending_notifs`**: A FIFO of badges from asynchronous notifications (e.g., IRQs) that haven't been received yet.
+*   **`send_queue`**: Head and tail pointers to a doubly linked list of TCBs blocked while trying to send to this endpoint. The links are stored directly in the TCBs.
+*   **`recv_queue`**: Head and tail pointers to a doubly linked list of TCBs blocked while waiting for a message on this endpoint.
+*   **`notification_word`**: A bitwise word (usize) replacing the dynamic queue for asynchronous notifications.
+    *   When a notification is sent (e.g., from an IRQ), the sender's badge is bitwise ORed into this word.
+    *   This allows multiple events to be pending simultaneously without allocating memory, but collapses multiple occurrences of the same event (same bit) into a single notification.
 
 ## 7. Capability Delegation
 

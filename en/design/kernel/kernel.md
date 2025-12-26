@@ -67,7 +67,7 @@ The **Root Task** is the first user-space process started by the kernel.
 ### 3.5 Kernel Abstractions as TCBs
 The kernel itself uses the TCB abstraction for internal management:
 *   **Idle Thread**: A lowest-priority TCB per CPU that runs when no other threads are ready.
-*   **Interrupt Threads**: Hardware interrupts can be abstracted as high-priority kernel threads that send IPC messages to user-space handlers, unifying scheduling and interrupt handling.
+*   **Kernel Threads**: While the kernel is mostly event-driven, it can support kernel-mode threads for specific background tasks if necessary, though the primary design avoids them in favor of user-space handlers.
 
 ## 4. Boot Process
 

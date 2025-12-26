@@ -51,7 +51,8 @@ Kernel drivers are removed. Hardware interrupts must reach user-space drivers vi
 ## 4. Data Structures
 
 ### 4.1 IrqSlot
-A kernel-internal structure representing a hardware IRQ line.
+A kernel-internal structure representing a hardware IRQ line. The kernel maintains a static array `IRQ_TABLE` of these slots (e.g., `[IrqSlot; 64]`).
+
 ```rust
 struct IrqSlot {
     notification: Option<Capability>, // Bound Endpoint/Notification

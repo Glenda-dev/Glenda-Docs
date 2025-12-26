@@ -45,8 +45,10 @@ Glenda uses **Reference Counting** combined with a **Capability Derivation Tree 
 
 ## 5. Kernel Memory
 
-*   **Static Memory**: The kernel image and initial data structures (like the early boot allocator) occupy a fixed portion of memory.
-*   **Dynamic Objects**: Once the Root Task is running, the kernel **never** allocates memory for itself. Every TCB, Page Table, or CNode required by a process must be provided by that process (or its parent) via the `Retype` mechanism.
+*   **Static Memory**: The kernel image and global data structures (like the `IRQ_TABLE` and `READY_QUEUES`) occupy a fixed portion of memory. The kernel does not use a dynamic heap allocator (`Vec`, `Box`, etc.) for its internal operations.
+*   **Object Storage**: Once the Root Task is running, the kernel **never** allocates memory for itself. Every TCB, Page Table, or CNode required by a process must be provided by that process (or its parent) via the `Retype` mechanism.
+    *   The kernel uses the physical memory backing the `Untyped` capability to store the object's metadata.
+    *   Intrusive data structures (e.g., linked lists embedded in TCBs) are used to manage queues, avoiding the need for auxiliary memory allocation.
 *   **Strict Accounting**: This design ensures that a malicious process cannot exhaust kernel memory. If a process runs out of its own `Untyped` quota, it simply cannot create more kernel objects.
 
 ## 6. Capability Interface
