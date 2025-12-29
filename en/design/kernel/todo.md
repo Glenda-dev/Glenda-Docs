@@ -90,6 +90,8 @@
     - [ ] User-space driver listening on Notification from UART IRQ.
 - [ ] **Timer Driver**:
     - [ ] User-space driver managing timer events.
+- [ ] **Graphics Driver**:
+    - [ ] User-space driver for framebuffer access.
 
 ## Phase 8: POSIX & Shell
 - [ ] **Tux Server**:
@@ -97,3 +99,19 @@
     - [ ] `fork`/`exec` emulation via TCB manipulation.
 - [ ] **Shell**:
     - [ ] Basic command line interface.
+
+## Phase 9: SMP Support
+- [ ] **Multi-Hart Boot**:
+    - [ ] Extend boot process to start secondary harts via SBI.
+- [ ] **Inter-Processor Interrupts (IPI)**:
+    - [ ] Implement IPI sending via SBI calls.
+
+## Phase 10: Networking & Filesystem
+- [ ] **Network Stack**:
+    - [ ] User-space network driver.
+- [ ] **Filesystem**:
+    - [ ] User-space filesystem driver.
+
+## Phase 11: Graphical User Interface
+- [ ] **Wayland Compositor**:
+    - [ ] Basic window management.
