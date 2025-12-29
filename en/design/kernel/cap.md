@@ -27,6 +27,7 @@ Capabilities point to specific kernel objects:
 | **PageTable** | A level of the hardware page table structure. |
 | **IrqHandler** | Authority to manage a specific hardware interrupt. |
 | **CNode** | A node in the CSpace structure (storage for caps). |
+| **Reply** | A special, one-shot capability used to reply to a `Call` invocation. |
 
 ## 4. Capability Operations
 

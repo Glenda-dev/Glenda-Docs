@@ -25,8 +25,15 @@ When a capability is invoked, the `Method ID` determines the operation.
 | :--- | :--- | :--- |
 | **`Send`** | 1 | Send an IPC message to the endpoint. |
 | **`Recv`** | 2 | Receive an IPC message from the endpoint. |
+| **`Call`** | 3 | Send a message and wait for a reply (RPC). |
+| **`Notify`** | 4 | Send a notification (signal) to the endpoint. |
 
-### 3.2 Thread Control Block (TCB)
+### 3.2 Reply Object
+| Method | ID | Description |
+| :--- | :--- | :--- |
+| **`Reply`** | 1 | Reply to a `Call` operation. |
+
+### 3.3 Thread Control Block (TCB)
 
 | Method | ID | Description |
 | :--- | :--- | :--- |

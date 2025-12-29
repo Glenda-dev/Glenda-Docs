@@ -39,13 +39,16 @@ The UTCB is a critical shared memory region between the kernel and user space.
 
 ## 5. IPC Operations
 
-### 4.1 Synchronous Send/Receive
-*   **`sys_send(dest_cptr)`**: Blocks the caller until a receiver is waiting on the target Endpoint.
-*   **`sys_recv(src_cptr)`**: Blocks the caller until a sender arrives at the target Endpoint or a pending notification is available.
-*   **`sys_call(dest_cptr)`**: (Planned) A combined Send-then-Receive operation that provides an implicit Reply capability for the server to respond.
+### 5.1 Synchronous Send/Receive
+*   **`Send` (Method 1)**: Blocks the caller until a receiver is waiting on the target Endpoint.
+*   **`Recv` (Method 2)**: Blocks the caller until a sender arrives at the target Endpoint or a pending notification is available.
+*   **`Call` (Method 3)**: A combined Send-then-Receive operation that provides an implicit Reply capability for the server to respond. This is used for RPC-style communication.
 
-### 4.2 Asynchronous Notify
-*   **`notify(endpoint, badge)`**: A kernel-internal or user-space operation that delivers a badge to an Endpoint without blocking. If no receiver is waiting, the badge is queued in the Endpoint's `pending_notifs` list.
+### 5.2 Asynchronous Notify
+*   **`Notify` (Method 4)**: A non-blocking operation that delivers a badge to an Endpoint. If no receiver is waiting, the badge is bitwise ORed into the Endpoint's `notification_word`.
+
+### 5.3 Reply
+*   **`Reply` (Method 1 on Reply Object)**: Used by a server to reply to a client that performed a `Call`. The Reply object is a special, one-shot capability provided by the kernel during a `Call`.
 
 ## 6. Endpoints
 

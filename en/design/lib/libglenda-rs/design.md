@@ -46,8 +46,6 @@ pub struct UTCB {
 ### 3.1 System Calls
 The library provides low-level wrappers for RISC-V `ecall`:
 - `sys_invoke(cptr, method, arg0..arg5)`
-- `sys_send(cptr, msg_info)`
-- `sys_recv(cptr)`
 
 ### 3.2 Object-Oriented Invocation
 `CapPtr` provides methods for common kernel object operations:

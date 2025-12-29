@@ -91,5 +91,3 @@ The kernel itself uses the TCB abstraction for internal management:
 ## 5. System Call Interface
 
 *   **`sys_invoke(cptr, ...)`**: Invoke a method on a kernel object (TCB, PageTable, etc.).
-*   **`sys_send(cptr, ...)`**: Send a message to an Endpoint (blocking).
-*   **`sys_recv(cptr, ...)`**: Wait for a message from an Endpoint.

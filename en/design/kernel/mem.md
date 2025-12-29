@@ -59,7 +59,6 @@ The `PageTable` kernel object exposes the following methods via `sys_invoke`:
 | :--- | :--- |
 | `Map` | Map a `Frame` capability to a virtual address. |
 | `Unmap` | Unmap a virtual address. |
-| `GetStatus` | Query the status of a mapping (permissions, dirty bit). |
 
 The `Untyped` kernel object exposes:
 
@@ -73,6 +72,5 @@ The `CNode` kernel object (representing CSpace) exposes:
 | :--- | :--- |
 | `Copy` | Create a new capability to the same object (increments ref count). |
 | `Mint` | Create a new capability with reduced rights or a new Badge. |
-| `Move` | Move a capability from one slot to another. |
 | `Revoke` | Recursively delete all capabilities derived from the target. |
 | `Delete` | Remove a capability from a slot (decrements ref count). |

@@ -19,32 +19,28 @@ A thread in Glenda exists in one of several strictly defined states. State trans
 | **Running** | The thread is currently executing on the CPU. |
 | **BlockedSend** | The thread is waiting to send an IPC message to a busy receiver. |
 | **BlockedRecv** | The thread is waiting to receive an IPC message from an endpoint. |
+| **BlockedCall** | The thread is waiting for a reply to an IPC Call. |
 
 ### 2.2 State Transition Diagram
 
-```text
-       +--------+   Configure    +----------+
-       | Untyped| -------------> | Inactive | <--------------------+
-       +--------+                +----------+                      |
-                                   |    ^                          |
-                            Resume |    | Suspend                  |
-                                   v    |                          |
-                              +----------+                         |
-                   +--------> |   Ready  | <------------------+    |
-                   |          +----------+                    |    |
-          Preempt  |               | Schedule                 |    |
-          / Yield  |               v                          |    |
-                   |          +---------+    IPC Recv         |    |
-                   +--------- | Running | ------------------> |    |
-                              +---------+                     |    |
-                                   |     IPC Send             |    |
-                                   +----------------------->  |    |
-                                                              |    |
-                                                              v    |
-                                                       +-------------+
-                                                       |   Blocked   |
-                                                       | (Send/Recv) |
-                                                       +-------------+
+```mermaid
+stateDiagram-v2
+    Untyped --> Inactive: Retype
+    Inactive --> Ready: Resume
+    Ready --> Inactive: Suspend
+    Running --> Inactive: Suspend
+
+    Ready --> Running: Schedule
+    Running --> Ready: Preempt / Yield
+
+    Running --> BlockedSend: IPC Send (No Recv)
+    BlockedSend --> Ready: Receiver Ready
+
+    Running --> BlockedRecv: IPC Recv (No Send)
+    BlockedRecv --> Ready: Sender Ready
+
+    Running --> BlockedCall: IPC Call
+    BlockedCall --> Ready: IPC Reply
 ```
 
 ## 3. Thread Control Block (TCB) Structure
@@ -59,11 +55,9 @@ The TCB is a kernel-only structure. It contains the minimal state required to ma
 *   **State**: Current lifecycle state (enum).
 *   **Intrusive Links**: `prev` and `next` pointers to link the TCB into scheduler or IPC queues without dynamic allocation.
 *   **IPC State**:
-    *   `ipc_badge`: The badge value to be delivered to the receiver.
-    *   `ipc_cap`: The capability being transferred during IPC.
-*   **Privileged**: Boolean indicating if the thread is a **Kernel Thread**.
-    *   If `true`, the thread runs in **Supervisor Mode (S-Mode)** and uses the kernel's address space.
-    *   If `false`, the thread runs in **User Mode (U-Mode)** and uses its assigned `VSpace`.
+    *   `fault_handler`: Capability (Endpoint) to send fault IPCs to.
+    *   `ipc_buffer`: Virtual address of the IPC buffer (part of UTCB).
+    *   `send_queue_head/tail`: Queue of threads waiting to send to this thread.
 *   **CSpace Root**: Capability to the root `CNode` of the thread's capability space.
 *   **VSpace Root**: Capability to the root `PageTable` of the thread's address space.
 *   **UTCB Frame**: Capability to the physical frame used for the UTCB.
