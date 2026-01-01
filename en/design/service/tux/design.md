@@ -1,26 +1,44 @@
-# Tux: POSIX Service Daemon (posixd)
+# Tux Design Document
 
-Tux is the POSIX personality server for the Glenda microkernel. It provides a POSIX-compliant environment for user applications by mapping standard POSIX system calls to Glenda's microkernel primitives (Capabilities, IPC, Endpoints).
+## 1. Introduction
+Tux is the POSIX Server for Glenda. Since Glenda is a microkernel with its own native async IPC, it does not natively support the POSIX API (fork, exec, blocking I/O, signals). Tux bridges this gap by providing a POSIX-compliant environment for user applications.
 
-## 1. Core Responsibilities
+## 2. Responsibilities
 
-- **Process Management**: Maintains the PID hierarchy, handles process creation (`fork`), execution (`exec`), and termination (`exit`, `wait`).
-- **File Descriptor (FD) Management**: Manages per-process FD tables, mapping integer FDs to IPC Endpoint Capabilities pointing to Gopher (VFS) or Unicorn (Drivers).
-- **Signal Handling**: Implements asynchronous signal delivery using Glenda's Notification objects.
-- **System Call Translation**: Acts as the primary `ecall` handler (via IPC) for standard C libraries (libc), translating POSIX calls into microkernel IPC requests.
+*   **POSIX API Implementation**:
+    *   Provides the standard C library interface (via `musl-glenda` which talks to Tux).
+    *   Handles `fork()`, `exec()`, `wait()`, `pipe()`, `kill()`.
+*   **Signal Handling**:
+    *   Simulates Unix signals. Factotum notifies Tux of hardware faults, and Tux delivers them as signals (SIGSEGV, SIGILL) to the registered process.
+*   **Process Group Management**:
+    *   Manages PIDs, PGIDs, Sessions.
+*   **File Descriptor Table**:
+    *   Maintains the mapping between integer FDs and Glenda Capability Handles (for Gopher files, sockets, pipes).
 
-## 2. Architecture
+## 3. Architecture
 
-Tux runs as a high-priority user-space server. It listens on a global Endpoint provided by the Root Task (9ball).
+Tux runs as a high-priority user-space server. Applications linked with `musl-glenda` (libc) translate syscall instructions into IPC calls to Tux.
 
-### 2.1 Identification via Badges
-To ensure security, Tux relies on **IPC Badges**. When the Root Task or Tux itself distributes a session capability to a new process, it attaches a unique, immutable Badge to the Endpoint.
+### Identification via Badges
+To ensure security, Tux relies on **IPC Badges**. When Tux distributes a session capability to a new process, it attaches a unique, immutable Badge to the Endpoint.
 - When Tux receives a message, the kernel injects the Badge into the receiver's context.
 - Tux uses this Badge to look up the `ProcessContext` in its internal process table, preventing processes from spoofing their PID.
 
-## 3. Data Structures
+### The "Fork" Problem
+`fork()` is difficult in microkernels. Tux works with Factotum to implement Copy-On-Write (COW) forking:
+1.  Tux requests Factotum to clone the address space (marking pages read-only).
+2.  Tux duplicates the file descriptor table.
+3.  Tux creates the new thread via Factotum.
 
-### 3.1 IPC Protocol
+## 4. Interfaces
+
+*   **Interface**: `org.glenda.posix.Tux`
+*   **Methods**:
+    *   `Syscall(num: u32, args: [u64; 6]) -> u64`
+    *   `RegisterSignalHandler(signum: u32, handler: u64)`
+    *   `GetPid() -> u32`
+
+## 5. IPC Protocol
 Defined in `libglenda-rs` for shared use between Tux and applications.
 
 ```rust
@@ -35,18 +53,6 @@ pub enum PosixSyscall {
     Wait = 7,
     Exit = 8,
     GetPid = 9,
-}
-
-#[repr(C)]
-pub struct PosixRequest {
-    pub syscall_id: PosixSyscall,
-    pub args: [usize; 5],
-}
-
-#[repr(C)]
-pub struct PosixResponse {
-    pub error: i32,    // 0 for success, negative for errno
-    pub ret: usize,    // Return value
 }
 ```
 
@@ -69,24 +75,8 @@ struct PosixProcess {
 }
 ```
 
-## 4. Interaction Flows
 
-### 4.1 File Open (`open`)
-1. **App** calls `open("/etc/motd")` in libc.
-2. **libc** sends a `PosixRequest` to Tux via IPC.
-3. **Tux** receives the request and identifies the caller via its **Badge**.
-4. **Tux** forwards the path lookup to **Gopher (VFS)**.
-5. **Gopher** returns a new `Endpoint Capability` for the file session.
-6. **Tux** allocates a new FD (e.g., `3`), stores the capability in the process's `fd_table`, and returns `3` to the App.
-
-### 4.2 Process Creation (`fork`)
-1. **App** calls `fork()`.
-2. **Tux** requests the kernel to create a new TCB, CSpace, and VSpace.
-3. **Tux** performs a deep copy of the parent's VSpace (or sets up Copy-on-Write).
-4. **Tux** clones the parent's `fd_table` into the child.
-5. **Tux** registers the new PID and returns the child PID to the parent, and `0` to the child.
-
-## 5. Security and Isolation
+## 4. Security and Isolation
 
 - **Capability-Based**: Tux only grants FDs (Capabilities) that the process is authorized to access.
 - **No Global State**: All POSIX state is encapsulated within Tux. The kernel remains unaware of "processes" or "files".
