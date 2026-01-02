@@ -24,6 +24,29 @@ Drivers in Glenda are standalone processes.
 *   **Interfaces**: Drivers implement standard interfaces (e.g., `org.glenda.driver.Block`, `org.glenda.driver.Network`).
 *   **IPC**: Clients (like Gopher) talk directly to the driver process via IPC after looking up the driver in Unicorn or the Name Server.
 
+### Driver Registration and Matching Mechanism
+Unicorn uses a metadata-driven mechanism to manage the binding between drivers and hardware.
+
+1.  **Driver Manifest**:
+    Each driver comes with a manifest file (e.g., `manifest.toml`) describing the hardware it supports.
+    ```toml
+    [driver]
+    name = "ns16550a"
+    binary = "/bin/drivers/ns16550a"
+    type = "process"
+
+    [match]
+    compatible = ["ns16550a", "snps,dw-apb-uart"]
+
+    [pci]
+    ids = [{ vendor = 0x1234, device = 0x5678 }]
+    ```
+
+2.  **Matching Process**:
+    *   **Registration**: Upon startup, Unicorn scans the system driver directory, parses all manifests, and builds a matching table.
+    *   **Discovery**: Unicorn scans the DTB or enumerates the PCI bus to discover hardware devices.
+    *   **Binding**: For each device, Unicorn looks up the corresponding driver in the matching table. If found, it requests Factotum to spawn the driver process and passes the Device Capability to it.
+
 ## 4. Supported Subsystems
 *   **UART**: Serial consoles.
 *   **VirtIO**: Network, Block, GPU, Input (for virtualized environments).

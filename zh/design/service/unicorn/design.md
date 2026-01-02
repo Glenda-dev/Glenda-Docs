@@ -24,6 +24,29 @@ Glenda 中的驱动程序是独立的进程。
 *   **接口**: 驱动程序实现标准接口（例如 `org.glenda.driver.Block`, `org.glenda.driver.Network`）。
 *   **IPC**: 客户端（如 Gopher）在 Unicorn 或名称服务器中查找驱动程序后，通过 IPC 直接与驱动程序进程对话。
 
+### 驱动注册与匹配机制
+Unicorn 采用元数据驱动的机制来管理驱动程序与硬件的绑定。
+
+1.  **驱动清单 (Driver Manifest)**:
+    每个驱动程序都附带一个清单文件（例如 `manifest.toml`），描述其支持的硬件。
+    ```toml
+    [driver]
+    name = "ns16550a"
+    binary = "/bin/drivers/ns16550a"
+    type = "process"
+
+    [match]
+    compatible = ["ns16550a", "snps,dw-apb-uart"]
+
+    [pci]
+    ids = [{ vendor = 0x1234, device = 0x5678 }]
+    ```
+
+2.  **匹配流程**:
+    *   **注册**: Unicorn 启动时扫描系统驱动目录，解析所有清单并建立匹配表。
+    *   **发现**: Unicorn 扫描 DTB 或枚举 PCI 总线以发现硬件设备。
+    *   **绑定**: 对于每个设备，Unicorn 在匹配表中查找对应的驱动。如果找到，则请求 Factotum 启动驱动进程，并将设备 Capability 传递给它。
+
 ## 4. 支持的子系统
 *   **UART**: 串行控制台。
 *   **VirtIO**: 网络、块、GPU、输入（用于虚拟化环境）。
