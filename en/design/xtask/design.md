@@ -19,7 +19,7 @@ The build system is data-driven. The list of user-space components to be package
 name = "root-task"
 path = "service/hello"           # Source directory
 build_cmd = "make"               # Command to build the component
-output_bin = "service/hello/hello.bin" # Path to the resulting binary
+output = "service/hello/hello.bin" # Path to the resulting binary
 kind = "root_task"               # Type: root_task, driver, server, file
 ```
 
@@ -31,7 +31,7 @@ When running `cargo xtask build`, the following steps occur:
 2.  **Build Components**:
     *   Iterates through each component.
     *   Executes the specified `build_cmd` in the component's directory.
-    *   Verifies the existence of `output_bin`.
+    *   Verifies the existence of `output`.
 3.  **Generate Payload (`modules.bin`)**:
     *   Collects all component binaries.
     *   Generates a **Boot Module Header** (Magic + Count).
