@@ -23,5 +23,5 @@
     * [ ] VirtIO
     * [ ] PCI Bus
   * [ ] RC Shell
-  * [ ] Tux POSIX Server
-  * [ ] LINE Linux Compatible Layer (Line is not emulator)
+  * [ ] APE POSIX Server
+  * [ ] Chimera Linux Compatible Layer
