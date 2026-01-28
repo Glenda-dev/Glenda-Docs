@@ -1,127 +1,157 @@
-# Glenda 内核移植指南
+# Glenda 内核与库移植指南
 
-本文档详细说明了将 Glenda 内核移植到新硬件架构（例如 LoongArch, AArch64 等）时，需要实现的硬件抽象层 (HAL) 接口。
+本文档详细说明了将 Glenda 及其核心库移植到新硬件架构（例如 LoongArch, AArch64 等）时，需要实现的硬件抽象层 (HAL) 接口。
 
 ## 1. 移植概览
 
-Glenda 的内核核心逻辑与底层硬件细节通过 `kernel/src/hal/interface` 目录下定义的接口进行解耦。移植工作的核心是在 `kernel/src/hal/arch/<new_arch>` 目录下实现这些接口，并在 `kernel/src/hal/mod.rs` 中进行挂载。
+Glenda 的核心逻辑与底层硬件细节通过 HAL 接口进行解耦。移植工作主要分为两部分：
+1. **内核移植**: 在 `kernel/src/hal/arch/<new_arch>` 下实现 `kernel/src/hal/api` 定义的接口。
+2. **库移植**: 在 `lib/libglenda-rs/src/arch/<new_arch>.rs` 中实现架构相关的系统调用与运行时支持。
 
-### 目录结构
+### 内核目录结构
 
 建议的目录结构如下（以 `loongarch64` 为例）：
 
 ```
 kernel/src/hal/loongarch64/
 ├── mod.rs          # 模块导出与架构挂载
-├── boot.rs/S       # 启动汇编和初始化
+├── boot.rs/S       # 启动与引导检测
 ├── console.rs      # 早期串口控制台
-├── cpu.rs          # CPU 核心能力 (CpuHal)
-├── irq.rs          # 中断管理 (IrqHal)
-├── mem.rs          # 内存管理 (MemHal)
-├── platform.rs     # 平台级功能 (PlatformHal)
-├── proc.rs         # 进程/线程上下文 (ProcHal)
-└── trap.rs         # 异常上下文与处理 (TrapHal)
+├── cpu.rs          # CPU 核心能力
+├── irq.rs          # 中断管理
+├── mem.rs          # 内存管理与页表
+├── platform.rs     # 平台级功能
+├── proc.rs         # 进程/线程上下文
+├── runtime.rs      # 运行时辅助 (backtrace)
+└── trap.rs         # 异常上下文与处理
 ```
 
-## 2. 接口实现清单
+## 2. 内核接口实现清单 (`kernel/src/hal/api`)
 
-你需要实现 `kernel/src/hal/interface` 中定义的所有模块。
+你需要实现 `kernel/src/hal/api` 中定义的所有模块。
 
 ### 2.1 启动 (Boot) - `interface/boot.rs`
 
-这部分通常由汇编实现。你需要定义全局符号 `_start` 作为链接器入口。
-
-- **职责**：
-    - 初始化 CPU 状态。
-    - 设置启动栈 (Boot Stack)。
-    - 跳转到 `rust_main` (或类似名称的 Rust 入口)。
-    - 处理多核启动同步（如果支持 SMP）。
+- **职责**：探测引导加载程序类型和平台信息。
+- **函数**:
+    - `detect() -> (usize, PlatformInfo)`: 返回启动阶段传递的CPUID和平台信息结构。
+    - 需要定义汇编入口 `_start` 并处理多核启动。
 
 ### 2.2 内存管理 (Memory) - `interface/mem.rs`
 
 这是移植中最复杂的部分，涉及分页机制和地址空间布局。
 
 #### 必需常量
-- `PGSIZE`: 页面大小（通常 4096）。
+- `PGSIZE`: 页面大小。
 - `VA_MAX`: 虚拟地址空间上限。
-- `PHYS_MAP_BASE`: 物理内存线性映射基地址 (HHDM)。
+- `PHYS_MAP_BASE`: 物理内存线性映射基地址。
 - `KERNEL_BASE`: 内核链接基地址。
 - `PT_LEVELS`: 页表层级数。
+- `PGNUM`: 每级页表的页表项数量。
 
-#### 必需结构体
-- `Pte`: 页表项，需实现一系列位操作方法 (`is_valid`, `is_leaf`, `set_ppn` 等)。
-- `PteFlags`: 页表项标志位 (`VALID`, `READ`, `WRITE`, `EXECUTE`, `USER`, `GLOBAL`, `ACCESSED`, `DIRTY`)。
-- `PageTable`: 页表结构。
+#### 必需结构体与方法
+- `Pte`: 页表项。需实现 `null`, `from`, `as_usize`, `get_ppn`, `set_ppn`, `get_flags`, `set_flags`, `is_valid`。
+- `PteFlags`: 标志位。
+- `PageTable`: 页表结构，包含 `entries: [Pte; PGNUM]`。
+- `perms` 模块: 定义 `VALID`, `READ`, `WRITE`, `EXECUTE`, `USER`, `GLOBAL`, `ACCESSED`, `DIRTY` 等常量。
 
 #### 必需函数
-- `flush_tlb(vaddr)`: 刷新 TLB，支持特定地址或全局刷新。
-- `activate_pagetable(root_paddr)`: 写入页表寄存器 (如 `satp`, `ttbr0`)。
-- `deactivate_pagetable()`: 禁用分页（或重置为初始状态）。
+- `flush_tlb(vaddr: Option<VirtAddr>)`: 刷新 TLB。
+- `activate_pagetable(root_paddr: PhysAddr)`: 激活页表。
+- `deactivate_pagetable()`: 禁用分页。
+- `get_vpn_index(va, level) -> VPN`: 获取虚拟地址在某级页表的索引。
+- `kpt_setup(kpt: &mut PageTable)`: 设置内核页表（如映射内核段）。
 
 ### 2.3 异常与陷阱 (Trap) - `interface/trap.rs`
 
-负责处理用户态到内核态的切换，以及异常分发。
+#### 结构体
+- `TrapContext`: 保存寄存器状态。
+    - `set_return_value(value)`
+    - `get_syscall_args() -> (usize, usize)`
+    - `from_trapframe(tf)`
+- `TrapFrame`: 陷阱帧。
+    - `set_badge(badge)`
+    - `get_epc()`, `set_epc(epc)`
+    - `set_tf(addr)`
+    - `update_context(ctx)`
+    - `configure_kernel(...)`: 配置内核态返回信息。
 
-#### 必需结构体
-- `TrapContext`: 保存通用寄存器、CSR 状态的结构体。
-
-#### 必需函数
-- `vector_init()`: 初始化异常向量表基地址 (`stvec`, `vbar_el1`)。
-- `get_cause(&ctx)`: 解析异常原因，返回通用的 `TrapCause` 枚举。
-- `get_pc(&ctx)`: 获取异常发生时的指令地址。
-- `advance_pc(&mut ctx, bytes)`: 移动 PC（用于系统调用返回）。
+#### 函数
+- `vector_init()`: 初始化异常向量表。
+- `get_cause() -> TrapCause`: 获取异常原因。
+- `get_pc() -> usize`: 获取异常发生时的 PC。
+- `advance_pc(pc, offset)`: 移动 PC。
+- `get_address() -> VirtAddr`: 获取故障地址（如 PageFault 地址）。
+- `get_status() -> usize`: 获取状态寄存器。
 
 ### 2.4 中断管理 (IRQ) - `interface/irq.rs`
 
-分为 **CPU 本地状态** 和 **平台控制器** 两部分。
-
 #### CPU 本地状态
-- `enable()` / `disable()`: 全局开关中断。
-- `is_enabled()`: 查询当前中断状态。
-- `wfi()`: 等待中断 (Wait For Interrupt)。
+- `enable()`, `disable()`: 开关中断。
+- `is_enabled()`: 查询状态。
+- `wfi()`: 等待中断。
 
-#### 平台控制器 (PLIC/GIC/IOCSR)
-- `init()`: 初始化全局中断控制器。
-- `init_cpu(cpuid)`: 初始化当前核的中断接口。
-- `mask(irq, cpuid)` / `unmask(irq, cpuid)`: 屏蔽/解除屏蔽特定中断。
-- `claim(cpuid)`: 获取当前挂起的中断号。
-- `complete(irq, cpuid)`: 发送中断完成信号 (EOI)。
+#### 平台控制器
+- `MAX_IRQS`: 最大中断数。
+- `init()`: 控制器初始化。
+- `init_cpu(cpuid)`: 当前核初始化。
+- `mask(irq, cpuid)`, `unmask(irq, cpuid)`: 屏蔽/解除屏蔽。
+- `claim(cpuid) -> Option<u32>`: 获取待处理中断号。
+- `complete(irq, cpuid)`: 发送 EOI。
+- `set_affinity`, `set_priority`: 设置亲和性和优先级。
+- `clear_soft()`: 清除软件中断。
 
 ### 2.5 CPU 核心能力 - `interface/cpu.rs`
 
-- `cpu_id()`: 获取当前硬件线程 ID (Hart ID)。
-- `read_cycle()`: 读取性能计数器。
-- `read_time()`: 读取实时时间（用于调度）。
-- `timer_set_next(next)`: 设置下一次时钟中断的时间点。
+- `MAX_CPUS`: 支持的最大核数。
+- `cpu_id()`: 获取当前核 ID。
+- `read_cycle()`, `read_time()`: 读取计数器。
+- `timer_set_next(next)`: 设置时钟中断。
 
 ### 2.6 进程上下文 (Process) - `interface/proc.rs`
 
-负责内核线程之间的切换 (`switch`)。
-
-#### 必需结构体
-- `ProcContext`: 保存 Callee-saved 寄存器 (`ra`, `sp`, `s0-s11` 等)。
-
-#### 必需函数
-- `switch_context(old, new)`: 汇编实现的上下文切换。
-- `ProcContext::new(entry, stack_top)`: 构造新线程的上下文。
+- `ProcContext`: 线程上下文。
+    - `new()`
+    - `configure(entry, stack_top)`
+    - `set_fp(fp)`
+- `switch_context(old, new)`: 上下文切换汇编实现。
 
 ### 2.7 平台功能 (Platform) - `interface/platform.rs`
 
-- `bootargs()`: 获取启动参数（命令行）。
-- `shutdown()` / `reboot()`: 关机与重启。
+- `PlatformInfo`: 平台信息结构。
+- `init(dtb)`: 平台初始化。
+- `bootargs()`: 获取启动参数。
+- `shutdown()`, `reboot()`: 关机重启。
 - `send_ipi(mask)`: 发送核间中断。
-- `memory_range()`: 获取可用物理内存范围。
+- `memory_range()`, `range()`: 获取内存范围。
+- `initrd()`: 获取 InitRD 范围。
+- `bootstrap_cpus()`: 启动从核。
 
-### 2.8 早期调试控制台 (Console) - `interface/console.rs`
+### 2.8 控制台 (Console) - `interface/console.rs`
 
-- `init()`: 初始化早期串口（如 UART, SBI Console）。
-- `print(args)`: 打印格式化字符串，用于内核启动早期的日志输出（Panic, Logs）。
+- `init()`: 初始化。
+- `print(args)`: 打印格式化字符串。
 
-## 3. 移植步骤建议
+### 2.9 运行时 (Runtime) - `interface/runtime.rs`
 
-1.  **建立骨架**：创建目录结构，使用 `unimplemented!()` 填充所有接口，确保能通过编译。
-2.  **启动代码**：编写 `boot.S`，能够打印字符到串口（验证 `console` 模块）。
-3.  **内存初始化**：实现 `mem` 模块，配置页表，开启 MMU。
-4.  **异常处理**：实现 `trap` 模块，能够捕获异常并打印寄存器。
-5.  **支持中断**：实现 `irq` 和 `cpu` 模块，开启时钟中断。
-6.  **多任务**：实现 `proc` 模块，支持 `switch_context`，启动第一个内核线程。
+- `backtrace()`: 打印调用栈。
+
+## 3. 库接口实现清单 (`lib/libglenda-rs`)
+
+在 `lib/libglenda-rs/src/arch/<arch>.rs` 中实现 `lib/libglenda-rs/src/arch/api.rs` 定义的接口，并在 `lib/libglenda-rs/src/arch/mod.rs` 中导出。
+
+#### 必需函数
+- `unsafe fn syscall(cptr: usize, method: usize) -> usize`: 执行系统调用。
+- `unsafe fn syscall_recv(cptr: usize, method: usize) -> (usize, usize)`: 执行接收系统调用 (返回两个值)。
+- `unsafe fn panic_break()`: 由于 panic 导致的停机或断点。
+- `fn backtrace()`: 用户态回溯。
+
+## 4. 移植步骤建议
+
+1.  **建立骨架**：创建目录结构，使用 `unimplemented!()` 填充所有接口。
+2.  **启动代码**：编写启动汇编和 `boot.rs`，实现 `console` 输出。
+3.  **内存初始化**：实现 `mem` 模块，配置页表。
+4.  **异常与中断**：实现 `trap`, `irq` 模块。
+5.  **进程切换**：实现 `proc` 模块的上下文切换。
+6.  **平台功能**：完善 `platform` 模块以支持多核和设备树解析。
+7.  **库支持**：实现 `libglenda-rs` 中的 syscall 汇编。
