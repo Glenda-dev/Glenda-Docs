@@ -23,5 +23,6 @@
     * [ ] VirtIO
     * [ ] PCI 总线
   * [ ] RC Shell
-  * [ ] Tux POSIX 服务器
-  * [ ] LINE Linux 兼容层 (Line 不是模拟器)
+  * [ ] APE ANSI/POSIX运行时环境
+  * [ ] Chimera 兼容层框架
+    * [ ] Tux Linux 兼容层 

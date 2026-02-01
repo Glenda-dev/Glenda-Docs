@@ -23,5 +23,6 @@
     * [ ] VirtIO
     * [ ] PCI Bus
   * [ ] RC Shell
-  * [ ] APE POSIX Server
-  * [ ] Chimera Linux Compatible Layer
+  * [ ] APE ANSI/POSIX Server
+  * [ ] Chimera Compatible Layer Framework
+    * [ ] Tux Linux Compatibility Layer
