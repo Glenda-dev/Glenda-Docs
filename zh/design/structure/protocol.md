@@ -67,7 +67,7 @@ Gopher 实现了标准的 **9P2000** 协议。Glenda IPC 用作传输层，取�
 *   **请求**: 客户端构造标准的 9P `T-message` 并将其写入 **UTCB (IPC Buffer)**。
 *   **IPC 调用**: 客户端在 Gopher 的 Endpoint 上调用 `Call`。
     *   **标签**: `0x0200` (9P_REQUEST)
-    *   **参数**: `[msg_length, 0, 0, 0, 0, 0]`
+    *   **参数**: `[msg_length, 0, 0, 0,0, 0, 0]`
 *   **响应**: Gopher 处理请求并将相应的 9P `R-message` 写回客户端的 UTCB。
 
 **支持的 9P 操作:**

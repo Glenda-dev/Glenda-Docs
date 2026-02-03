@@ -67,7 +67,7 @@ Gopher implements the standard **9P2000** protocol. Glenda IPC serves as the tra
 *   **Request**: The client constructs a standard 9P `T-message` and writes it into the **UTCB (IPC Buffer)**.
 *   **IPC Call**: The client invokes `Call` on Gopher's Endpoint.
     *   **Label**: `0x0200` (9P_REQUEST)
-    *   **Args**: `[msg_length, 0, 0, 0, 0, 0]`
+    *   **Args**: `[msg_length, 0, 0, 0,0, 0, 0]`
 *   **Response**: Gopher processes the request and writes the corresponding 9P `R-message` back into the client's UTCB.
 
 **Supported 9P Operations:**
