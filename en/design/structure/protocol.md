@@ -37,9 +37,12 @@ Labels are used to distinguish different service requests or event types.
 | :--- | :--- | :--- |
 | `0x0000` - `0x00FF` | **Generic** | Generic Control Protocols (Ping, Debug) |
 | `0x0100` - `0x01FF` | **Factotum** | Process and Thread Management |
-| `0x0200` - `0x02FF` | **Gopher** | File System and IO |
+| `0x0200` - `0x02FF` | **9P Server** | General Namespace & Resource Access (Common to all services) |
 | `0x0300` - `0x03FF` | **Unicorn** | Device Driver Control |
 | `0x0400` - `0x04FF` | **Rio** | Graphics Display Protocol |
+| `0x0500` - `0x05FF` | **Fossil** | File System Protocol (Data) |
+| `0x0600` - `0x06FF` | **Gopher** | Network Protocol (Data) |
+| `0x0700` - `0x07FF` | **Chimera** | Virtualization Protocol |
 
 ## 2. Detailed Protocol Definitions
 
@@ -59,44 +62,56 @@ Factotum acts as the central process manager and exception handler.
 | `0x0106` | `MAP_DEVICE` | `[paddr, size, flags]` | `[vaddr]` | Maps a physical device region (requires privileges). |
 | `0x0107` | `GET_PID` | `[]` | `[pid]` | Returns the current process ID. |
 
-### 2.2 Gopher Protocol (9P2000)
+### 2.2 Common 9P2000 Protocol
 
-Gopher implements the standard **9P2000** protocol. Glenda IPC serves as the transport layer, replacing the traditional TCP or pipe transport. This allows for network transparency and a unified resource interface.
+All system services (9P, Gopher, Fossil, Unicorn, Chimera, etc.) implement the **9P2000** protocol for management and configuration. Glenda IPC serves as the transport layer.
 
 **Transport Mechanism:**
-*   **Request**: The client constructs a standard 9P `T-message` and writes it into the **UTCB (IPC Buffer)**.
-*   **IPC Call**: The client invokes `Call` on Gopher's Endpoint.
+*   **Request**: The client constructs a standard 9P `T-message` and writes it into the **UTCB**.
+*   **IPC Call**: The client invokes `Call` on the Service's Endpoint.
     *   **Label**: `0x0200` (9P_REQUEST)
-    *   **Args**: `[msg_length, 0, 0, 0,0, 0, 0]`
-*   **Response**: Gopher processes the request and writes the corresponding 9P `R-message` back into the client's UTCB.
+*   **Response**: Service writes `R-message` back.
 
 **Supported 9P Operations:**
-
-| 9P Message Type | Description | Glenda Implementation Note |
-| :--- | :--- | :--- |
-| `Tversion` / `Rversion` | Protocol version negotiation | Negotiates buffer size (msize) |
-| `Tauth` / `Rauth` | Authentication | Can use Capabilities for auth |
-| `Tattach` / `Rattach` | Establish connection to root | Returns the root `fid` |
-| `Twalk` / `Rwalk` | Traverse directory hierarchy | Resolves paths component by component |
-| `Topen` / `Ropen` | Open file | Prepares `fid` for I/O |
-| `Tcreate` / `Rcreate` | Create file | Creates file in parent directory |
-| `Tread` / `Rread` | Read data | Data returned in UTCB (or Shared Mem) |
-| `Twrite` / `Rwrite` | Write data | Data sent via UTCB (or Shared Mem) |
-| `Tclunk` / `Rclunk` | Close fid | Releases the handle |
-| `Tremove` / `Rremove` | Remove file | Deletes the file |
-| `Tstat` / `Rstat` | Get attributes | Retrieves file metadata |
-| `Twstat` / `Rwstat` | Set attributes | Updates file metadata |
-
-**Large I/O Optimization (Zero-Copy):**
-Since the UTCB size is limited (typically 4KB), standard `Tread`/`Twrite` are inefficient for large data.
-*   **Shared Memory**: Clients can pass a Frame Capability (Shared Memory) to Gopher.
-*   **Bulk IO**: A specialized extension or a separate `READ_BULK` / `WRITE_BULK` method can be used to transfer data directly to/from the shared frame, bypassing the message copy.
+Refer to the standard 9P2000 specification.
 
 ### 2.3 Unicorn Protocol (Device Drivers)
 
 Unicorn manages device discovery, interrupt routing, and DMA memory allocation.
 
 **Base Protocol ID**: `0x0300`
+
+### 2.4 Dedicated Data Plane Protocols
+
+While 9P2000 is used for management, data intensive services (Gopher, Fossil) use dedicated protocols for performance.
+
+#### Fossil Block Protocol (0x0500)
+Used for block-level access or bulk file I/O.
+*   `READ_BLOCKS`, `WRITE_BLOCKS` using Shared Memory Descriptors.
+
+#### Gopher Net Protocol (0x0600)
+Used for packet I/O.
+*   `TX_PACKET`, `RX_POLL` using Ring Buffers.
+
+#### Chimera VM Protocol (0x0700)
+Used for controlling VMs.
+*   `VM_ENTER`, `VM_EXIT`, `INJECT_IRQ`.
+
+### 2.4 Dedicated Data Plane Protocols
+
+While 9P2000 is used for management, data intensive services (Gopher, Fossil) use dedicated protocols for performance.
+
+#### Fossil Block Protocol (0x0500)
+Used for block-level access or bulk file I/O.
+*   `READ_BLOCKS`, `WRITE_BLOCKS` using Shared Memory Descriptors.
+
+#### Gopher Net Protocol (0x0600)
+Used for packet I/O.
+*   `TX_PACKET`, `RX_POLL` using Ring Buffers.
+
+#### Chimera VM Protocol (0x0700)
+Used for controlling VMs.
+*   `VM_ENTER`, `VM_EXIT`, `INJECT_IRQ`.
 
 | ID | Method | Arguments | Return Values | Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -160,9 +175,11 @@ To communicate with system components, a process must possess the corresponding 
 | `2` | `CNODE_SELF` | CNode | Capability to self CNode |
 | `3` | `VSPACE_SELF` | PageTable | Capability to self VSpace (Root PageTable) |
 | `4` | `EP_FACTOTUM` | Endpoint | **IPC Channel to Factotum** (Process Mgr) |
-| `5` | `EP_GOPHER` | Endpoint | **IPC Channel to Gopher** (VFS Root) |
-| `6` | `EP_UNICORN` | Endpoint | IPC Channel to Unicorn (Optional/Driver only) |
-| `7` | `EP_RIO` | Endpoint | IPC Channel to Rio (Optional/GUI App only) |
+| `5` | `EP_GOPHER` | Endpoint | **IPC Channel to Gopher** (Network Stack) |
+| `6` | `EP_UNICORN` | Endpoint | IPC Channel to Unicorn (Device Mgr) |
+| `7` | `EP_RIO` | Endpoint | IPC Channel to Rio (GUI) |
+| `8` | `EP_FOSSIL` | Endpoint | **IPC Channel to Fossil** (File System) |
+| `9` | `EP_CHIMERA` | Endpoint | IPC Channel to Chimera (Virtualization) |
 | `10` | `FD_STDIN` | Endpoint/File | Standard Input |
 | `11` | `FD_STDOUT` | Endpoint/File | Standard Output |
 | `12` | `FD_STDERR` | Endpoint/File | Standard Error |
@@ -181,7 +198,7 @@ pub trait ProcessManager {
     fn get_pid(&self) -> Pid;
 }
 
-/// Gopher Client Interface (9P2000 Abstraction)
+/// Fossil Client Interface (9P2000 Abstraction)
 pub trait FileSystem {
     fn attach(&self, uname: &str, aname: &str) -> Result<Fid, Error>;
     fn walk(&self, fid: Fid, new_fid: Fid, names: &[&str]) -> Result<(), Error>;

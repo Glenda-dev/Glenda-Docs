@@ -18,8 +18,8 @@ The microkernel is responsible for the following minimal set of features:
 
 ### Components Moved to User Space
 *   **Device Drivers**: UART, VirtIO, etc.
-*   **File Systems**: VFS, FAT32, etc.
-*   **System Services**: Process management, memory servers.
+*   **File Systems**: Fossil (Unix-like), Gopher (Network), etc.
+*   **System Services**: Process management, virtualization.
 
 ## 3. Key Mechanisms
 

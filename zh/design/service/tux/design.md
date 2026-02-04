@@ -1,82 +1,42 @@
 # Tux 设计文档
 
 ## 1. 简介
-Tux 是 Glenda 的 POSIX 服务器。由于 Glenda 是一个具有自己原生异步 IPC 的微内核，它本身不支持 POSIX API（fork, exec, 阻塞 I/O, 信号）。Tux 通过为用户应用程序提供符合 POSIX 标准的环境来弥补这一差距。
+Tux 是 Glenda 的 **Linux 兼容环境**。它的架构采用了经典的 **L4Linux** (单一服务器) 模式。Tux 本质上是一个经过移植的 Linux 内核，它作为 Glenda 的一个普通**用户态服务**运行，而不是在一个全虚拟化的虚拟机中。
 
-## 2. 职责
+这种架构允许 Linux 应用程序以接近原生的性能与 Glenda 原生服务并存。
 
-*   **POSIX API 实现**:
-    *   提供标准 C 库接口（通过与 Tux 对话的 `musl-glenda`）。
-    *   处理 `fork()`, `exec()`, `wait()`, `pipe()`, `kill()`。
-*   **信号处理**:
-    *   模拟 Unix 信号。Factotum 通知 Tux 硬件故障，Tux 将其作为信号 (SIGSEGV, SIGILL) 传递给注册的进程。
-*   **进程组管理**:
-    *   管理 PID, PGID, 会话。
-*   **文件描述符表**:
-    *   维护整数 FD 和 Glenda Capability 句柄（用于 Gopher 文件、套接字、管道）之间的映射。
+## 2. 核心架构 (L4Linux 模式)
 
-## 3. 架构
+### 2.1 单一服务器 (Single Server)
+Tux 服务本身是一个运行在微内核之上的 Linux 内核实例。
+*   **Linux 线程**: 所有的 Linux 内核线程实际上只作为 Glenda 上的一个或多个线程运行。
+*   **用户空间**: Linux 应用程序（如 `bash`, `gcc`）作为独立的 Glenda 任务（拥有独立的地址空间）运行。
 
-Tux 作为高优先级用户空间服务器运行。与 `musl-glenda` (libc) 链接的应用程序将系统调用指令转换为对 Tux 的 IPC 调用。
+### 2.2 半虚拟化机制 (Paravirtualization Mechanism)
+Tux 通过修改 Linux 内核源代码（针对 Glenda 架构移植），将底层敏感指令和硬件访问操作替换为 **Hypercalls (HCall)** 或 Glenda IPC 调用。
+1.  **指令替换**: 特权指令（如 `sret`, `sfence.vma`, CSR 读写）被替换为对 Glenda 微内核或 Tux Server 的主动调用。
+2.  **HCall 接口**: 使用 `ecall` (作为 HCall) 直接请求 Gluenda 服务，而不是等待异常捕获。这减少了上下文切换的开销。
+3.  **中断模拟**: 硬件中断以 IPC 消息的形式投递给 Tux，Tux 在其事件循环中处理这些逻辑中断。
 
-### 通过 Badge 进行身份验证
-为了确保安全，Tux 依赖于 **IPC Badges**。当 Tux 将会话 Capability 分发给新进程时，它会将一个唯一的、不可变的 Badge 附加到 Endpoint。
-- 当 Tux 收到消息时，内核将 Badge 注入接收者的上下文。
-- Tux 使用此 Badge 在其内部进程表中查找 `ProcessContext`，防止进程欺骗其 PID。
+## 3. 资源映射
 
-### "Fork" 问题
-`fork()` 在微内核中很难实现。Tux 与 Factotum 合作实现写时复制 (COW) 分叉：
-1.  Tux 请求 Factotum 克隆地址空间（将页面标记为只读）。
-2.  Tux 复制文件描述符表。
-3.  Tux 通过 Factotum 创建新线程。
+Tux 不直接控制硬件，而是通过驱动程序桥接即“桩驱动 (Stub Drivers)”与 Glenda 原生服务交互。
 
-## 4. 接口
+*   **Block Device**: Tux 内核包含一个虚拟块设备驱动，将块 I/O 请求转换为对 **Fossil** 或 **Unicorn** 的 IPC 调用。
+*   **Network**: Tux 内核包含一个虚拟网卡驱动，将网络包发送给 **Gopher** 处理。
+*   **Console**: 映射到 **9Ball** 或 **Factotum** 的控制台输出。
+*   **Memory**: Tux 作为其客户端进程的 **Pager (外部缺页处理程序)**。当 Linux 应用发生缺页异常时，Tux 接收 IPC 并通过操纵 Glenda 的页表能力来映射内存。
 
-*   **接口**: `org.glenda.posix.Tux`
-*   **方法**:
-    *   `Syscall(num: u32, args: [u64; 6]) -> u64`
-    *   `RegisterSignalHandler(signum: u32, handler: u64)`
-    *   `GetPid() -> u32`
+## 4. 管理与互通 (Management & Interoperability)
 
-## 5. IPC 协议
-在 `libglenda-rs` 中定义，供 Tux 和应用程序共享使用。
+Tux 提供了丰富的接口以便与 Glenda 原生环境交互：
 
-```rust
-#[repr(u32)]
-pub enum PosixSyscall {
-    Open = 1,
-    Read = 2,
-    Write = 3,
-    Close = 4,
-    Fork = 5,
-    Exec = 6,
-    Wait = 7,
-    Exit = 8,
-    GetPid = 9,
-}
-```
+*   **控制平面 (9P)**: Tux 导出一个 9P 文件系统，暴露 Linux 内部状态（如 `/proc`, `/sys` 的对应物），允许 Glenda 工具 (`rc`, `ls`) 查看 Linux 进程。
+*   **数据平面 (共享内存)**: 通过高效的共享内存机制与 **Fossil** (FS) 和 **Gopher** (Net) 交换大数据块。
+*   **信号与事件**: 定义了一套机制，使得 Glenda 任务可以向 Linux 进程发送信号，反之亦然。
 
-### 3.2 内部进程跟踪
-Tux 维护所有活动 POSIX 进程的私有表。
+## 5. 与 Chimera 的关系
 
-```rust
-struct PosixProcess {
-    pid: i32,
-    parent_pid: i32,
-    // 微内核 Capabilities
-    tcb_cap: CapPtr,
-    vspace_cap: CapPtr,
-    cspace_cap: CapPtr,
-    // FD 表: FD -> 远程服务 Endpoint
-    fd_table: BTreeMap<i32, CapPtr>,
-    // 信号状态
-    signal_notif: CapPtr,
-    pending_signals: u64,
-}
-```
-
-## 4. 安全与隔离
-
-- **基于 Capability**: Tux 仅授予进程被授权访问的 FD (Capabilities)。
-- **无全局状态**: 所有 POSIX 状态都封装在 Tux 内部。内核不知道“进程”或“文件”。
-- **资源核算**: Tux 使用自己的 `Untyped` 内存池为新进程分配元数据，确保一个进程无法通过创建过多的子进程来耗尽系统范围的内存。
+虽然 Tux 采用了 L4Linux 架构，Chimera (虚拟化管理器) 仍然扮演辅助角色：
+*   如果 Tux 需要运行在硬件虚拟化容器中（以支持未修改的特权指令），Chimera 可作为其底层 VMM。
+*   在纯半虚拟化 (Para-virtualized) 模式下，Tux 直接运行在微内核上，不需要 Chimera 介入。默认配置倾向于纯半虚拟化以获得更低的开销。

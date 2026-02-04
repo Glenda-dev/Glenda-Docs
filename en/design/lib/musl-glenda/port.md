@@ -2,7 +2,7 @@
 
 ## 1. Introduction
 
-`musl-glenda` is the port of the [musl libc](https://musl.libc.org/) to the Glenda operating system. Since Glenda is a microkernel that does not implement the POSIX syscall ABI in the kernel, `musl-glenda` acts as the translation layer. It converts standard POSIX function calls (like `open`, `read`, `fork`) into IPC messages sent to the **Tux** POSIX Server.
+`musl-glenda` is the port of the [musl libc](https://musl.libc.org/) to the Glenda operating system. Since Glenda is a microkernel that does not implement the POSIX syscall ABI in the kernel, `musl-glenda` acts as the translation layer. It converts standard POSIX function calls (like `open`, `read`, `fork`) into IPC messages sent to the **Glenda Services** (Factotum, Fossil, Gopher).
 
 ## 2. Architecture
 
@@ -16,31 +16,27 @@ In `musl-glenda`, the `__syscall` function is overridden to perform a **Glenda I
 
 *   **Location**: `arch/riscv64/syscall_arch.h` (and similar for other archs).
 *   **Mechanism**:
-    1.  Retrieve the **Tux Endpoint Capability** (stored in a global variable during startup).
-    2.  Marshal the syscall number and arguments into the IPC message registers.
-    3.  Invoke `seL4_Call` (or the Glenda equivalent `glenda_call`) to send the message to Tux.
-    4.  Unpack the return value from the IPC response.
+    1.  Determine the target service based on the syscall number (e.g., `open` -> Fossil, `fork` -> Factotum).
+    2.  Retrieve the **Service Endpoint Capability**.
+    3.  Marshal the syscall number and arguments into the IPC message registers (using 9P or dedicated protocols).
+    4.  Invoke `seL4_Call` (or the Glenda equivalent `glenda_call`) to send the message.
+    5.  Unpack the return value from the IPC response.
 
 ```c
 // Conceptual implementation 
 long __syscall_arch(long n, long a1, long a2, long a3, long a4, long a5, long a6) {
-    glenda_ipc_msg_t msg;
-    msg.label = n; // Syscall number
-    msg.args[0] = a1;
-    // ... pack args ...
-    
-    glenda_ipc_recv_t resp = glenda_call(GLOBAL_TUX_CAP, &msg);
-    
+    // ... dispatch logic ...
+    glenda_ipc_recv_t resp = glenda_call(TARGET_CAP, &msg);
     return resp.ret_val;
 }
 ```
 
-### 2.2 The "Tux" Connection
+### 2.2 Service Connections
 
-For `musl-glenda` to function, every process must have a capability to talk to the Tux server.
+For `musl-glenda` to function, every process must have access to core services.
 
-*   **Bootstrap**: When Tux (or the Init task) starts a new process, it passes the **Tux Session Capability** as a specific handle (e.g., handle index `1`) in the new process's CSpace.
-*   **Initialization**: The `crt0` (C Runtime Start) code reads this capability and stores it in a hidden global variable `__glenda_tux_cap` accessible only to the syscall wrapper.
+*   **Bootstrap**: When the Init task (9Ball) starts a new process, it passes capabilities to **Factotum**, **Fossil**, and **Gopher** in the new process's CSpace.
+*   **Initialization**: The `crt0` code reads these capabilities and stores them for the syscall wrapper.
 
 ## 3. Key Subsystems
 
@@ -61,7 +57,7 @@ The entry point `_start` performs the following:
 *   **`brk`**: Not supported or emulated by allocating new pages contiguously.
 *   **`mmap`**:
     *   **Anonymous**: Converted into an IPC call to **Factotum** (the Process Manager) to allocate backing frames and map them into the VSpace.
-    *   **File-backed**: Converted into an IPC call to **Tux**, which coordinates with **Gopher** (VFS) and **Factotum** to map the file content.
+    *   **File-backed**: Converted into an IPC call to **Fossil**, which coordinates with **Factotum** to map the file content.
 
 ### 3.3 Threading (`pthread`)
 

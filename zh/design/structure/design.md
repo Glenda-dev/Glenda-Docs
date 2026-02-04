@@ -13,9 +13,12 @@ graph TD
     subgraph User Space
         9Ball[9Ball (Root Task)]
         Factotum[Factotum (进程/异常管理)]
-        Gopher[Gopher (命名空间/VFS)]
+        9P[9P (命名空间服务器)]
+        Gopher[Gopher (网络栈)]
+        Fossil[Fossil (文件系统)]
         Unicorn[Unicorn (驱动管理)]
-        Tux[Tux (POSIX 服务)]
+        Chimera[Chimera (虚拟化)]
+        Tux[Tux (L4Linux 服务)]
         App[用户应用]
     end
     subgraph Kernel Space
@@ -24,10 +27,17 @@ graph TD
 
     9Ball --> Kernel
     Factotum --> Kernel
+    9P --> Kernel
     Gopher --> Kernel
+    Fossil --> Kernel
     Unicorn --> Kernel
+    Chimera --> Kernel
+    Tux --> Kernel
     App --> Factotum
+    App --> 9P
     App --> Gopher
+    App --> Fossil
+    App --> Chimera
     App --> Tux
 \`\`\`
 
@@ -66,43 +76,79 @@ Glenda 的功能主要由一组协作的用户空间服务提供。
     *   **进程管理**：负责进程的创建 (Spawn)、销毁和生命周期管理。
     *   **内存管理**：维护进程的地址空间布局，处理缺页异常，实现写时复制 (COW) 等策略。
 
-### 3.3 Gopher (命名空间与 VFS 服务器)
-*   **角色**：资源管理器，实现类似于 Plan 9 的命名空间。
+### 3.3 9P (命名空间服务器)
+*   **角色**：系统的命名空间管理器。
 *   **职责**：
-    *   **统一命名空间**：将所有资源（文件、设备、网络连接、进程信息）抽象为文件系统树。
-    *   **9P2000 服务器**：基于 IPC 实现完整的 9P2000 协议。所有资源访问都通过标准的 9P 消息 (Tattach, Twalk, Topen, Tread, Twrite) 进行。
-    *   **协议转换**：充当 9P 多路复用器/代理。它将 9P 请求转发给特定的资源提供者（驱动程序、文件系统）或为虚拟文件合成响应。
+    *   **统一命名空间**：管理全局命名空间树，将其他服务 (Fossil, Gopher, Unicorn) 的资源挂载到统一层次结构中。
+    *   **挂载管理**：处理挂载 (mount) 和卸载 (unmount) 操作。
+    *   **9P2000 路由**：将 9P 请求路由到相应的服务。
 
-### 3.4 Unicorn (设备驱动管理器)
+### 3.4 Gopher (网络栈)
+*   **角色**：网络栈提供者。
+*   **职责**：
+    *   **网络管理**：管理网络接口和路由。
+    *   **TCP/IP 协议栈**：实现 TCP/IP 协议栈。
+    *   **9P 接口**：通过 9P2000 协议暴露网络栈管理接口。
+    *   **专用 IPC**：使用高性能共享内存 IPC 进行数据传输。
+
+### 3.5 Fossil (文件系统服务器)
+*   **角色**：持久化文件系统服务器。
+*   **职责**：
+    *   **存储管理**：管理磁盘存储。
+    *   **文件系统**：实现文件系统逻辑。
+    *   **9P 接口**：通过 9P2000 协议暴露文件系统结构。
+    *   **专用 IPC**：使用专用 IPC 协议进行批量数据传输。
+
+### 3.6 Unicorn (驱动管理)
 *   **角色**：驱动管理器。
 *   **职责**：
     *   管理硬件设备驱动程序。
-    *   将硬件中断 (IRQ) 转换为 IPC 消息并发送给驱动线程。
-    *   向 Gopher 注册设备文件。
+    *   将硬件中断 (IRQ) 转换为 IPC 消息。
+    *   **9P 接口**：通过 9P2000 暴露设备文件。
 
-### 3.5 Tux (POSIX 服务器)
-*   **角色**：POSIX 兼容层。
+### 3.7 Tux (Linux 兼容层)
+*   **角色**：Linux 半虚拟化兼容层。
 *   **职责**：
-    *   为普通应用程序提供标准的 POSIX 系统调用接口（通过 LibC 转发）。
-    *   将 POSIX 请求转换为 Glenda 的原生 IPC 调用，与 Factotum 和 Gopher 交互。
+    *   **Linux Guest**：作为轻量级半虚拟化 Linux Guest 运行在 Chimera 之上。
+    *   **ABI 兼容**：为未修改的 Linux 二进制文件提供 ABI 兼容性。
+    *   **9P 接口**：通过 9P2000 暴露进程信息/状态。
 
-### 3.6 Rio (显示管理器)
+### 3.8 Rio (显示管理器)
 *   **角色**：图形显示管理器。
 *   **职责**：
     *   管理图形硬件 (GPU/Framebuffer)。
     *   提供窗口系统和输入事件分发。
+    *   **9P 接口**：通过 9P2000 暴露窗口管理接口。
 
-### 3.7 Shell (命令行接口)
+### 3.9 Shell (命令行接口)
 *   **角色**：系统交互的主要用户界面。
 *   **职责**：
     *   **命令解析**：解释用户命令和脚本。
     *   **进程控制**：通过 Factotum 启动应用程序 (Spawn)。
-    *   **文件管理**：与 Gopher 交互进行文件操作。
+    *   **文件管理**：与命名空间 (9P) 交互进行文件操作。
+
+### 3.10 APE (ANSI/POSIX Environment)
+*   **角色**：系统库支持。
+*   **职责**：
+    *   **Musl 支撑**：作为 `musl` 的底层库，实现平台适配器。
+    *   **直接交互**：直接通过特定的专用 IPC 协议与系统服务（Gopher, Fossil, Tux）交互，在高性能场景下绕过通用的 9P 命名空间。
+    *   **协议适配**：将各种协议（如块设备 I/O、网络流、Framebuffer）适配为标准 POSIX 调用。
     *   **环境**：管理环境变量和工作目录。
+
+### 3.11 Chimera (虚拟化/半虚拟化/容器化服务器)
+*   **角色**：虚拟机/容器监视器 (VMM)。
+*   **职责**：
+    *   **虚拟化**：提供硬件虚拟化支持 (利用 RISC-V H-Extension 等硬件扩展或软件模拟)。
+    *   **资源隔离**：管理 Guest 操作系统或容器的隔离环境。
+    *   **Tux 宿主**：作为 **Tux** Linux 兼容层的 Hypervisor/宿主。
+    *   **9P 接口**：通过 9P2000 暴露 VM 管理接口。
 
 ## 4. 组件交互模型
 
-Glenda 采用 Client-Server 模型。应用程序作为 Client，通过 IPC 向 Server 发送请求。
+Glenda 采用混合的 Client-Server 模型。
 
-*   **系统调用路径**：App -> LibC -> IPC -> Tux/Factotum/Gopher -> Kernel
+*   **数据平面 (Data Plane)**：组件之间使用 **专用 IPC 协议** (例如共享内存环形缓冲区、直接 Capability 调用) 进行高吞吐量和低延迟的操作。
+*   **控制/管理平面 (Control/Management Plane)**：所有组件都暴露 **9P2000** 接口。这为以文件形式检查、配置和管理系统的每个部分提供了统一的方式。**9P 服务器** 将这些聚合为一个单一的命名空间。
+
+*   **系统调用路径**：App -> LibC -> APE -> IPC (专用协议) -> Gopher/Fossil/Chimera -> Kernel
 *   **异常处理路径**：App (Fault) -> Kernel -> IPC -> Factotum -> (Fix/Kill) -> Kernel -> App

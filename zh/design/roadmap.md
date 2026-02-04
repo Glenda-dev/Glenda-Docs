@@ -14,15 +14,21 @@
     * [ ] 权限管理
   * [ ] Rio 显示管理器
     * [ ] Wayland 支持
-  * [ ] Gopher 命名空间服务器
-    * [ ] VFS 支持
-    * [ ] LWIP 网络栈
-    * [ ] FUSE 支持
+  * [ ] Gopher 网络协议栈
+    * [ ] LWIP 集成
+    * [ ] 网络驱动接口
+  * [ ] Fossil 文件系统服务器
+    * [ ] 磁盘 I/O
+    * [ ] Unix 类文件系统
+  * [ ] 9P 命名空间服务器
+    * [ ] 命名空间管理
+    * [ ] 挂载/绑定支持
   * [ ] Unicorn 设备驱动管理器
     * [ ] UART
     * [ ] VirtIO
     * [ ] PCI 总线
   * [ ] RC Shell
-  * [ ] APE ANSI/POSIX运行时环境
-  * [ ] Chimera 兼容层框架
-    * [ ] Tux Linux 兼容层 
+  * [ ] APE ANSI/POSIX 运行环境
+  * [ ] Chimera 虚拟化管理器
+    * [ ] Tux Linux 访客支持
+    * [ ] 虚拟机管理 

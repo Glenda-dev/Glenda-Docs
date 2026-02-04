@@ -5,7 +5,7 @@
 1. **App** calls `open("/etc/motd")` in libc.
 2. **libc** sends a `PosixRequest` to Tux via IPC.
 3. **Tux** receives the request and identifies the caller via its **Badge**.
-4. **Tux** forwards the path lookup to **Gopher (VFS)**.
+4. **Tux** forwards the path lookup to **Fossil** via 9P.
 5. **Gopher** returns a new `Endpoint Capability` for the file session.
 6. **Tux** allocates a new FD (e.g., `3`), stores the capability in the process's `fd_table`, and returns `3` to the App.
 

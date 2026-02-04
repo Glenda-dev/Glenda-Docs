@@ -37,9 +37,12 @@ struct MsgTag {
 | :--- | :--- | :--- |
 | `0x0000` - `0x00FF` | **Generic** | 通用控制协议 (Ping, Debug) |
 | `0x0100` - `0x01FF` | **Factotum** | 进程和线程管理 |
-| `0x0200` - `0x02FF` | **Gopher** | 文件系统和 IO |
+| `0x0200` - `0x02FF` | **9P Server** | 通用命名空间和资源访问 (所有服务通用) |
 | `0x0300` - `0x03FF` | **Unicorn** | 设备驱动控制 |
 | `0x0400` - `0x04FF` | **Rio** | 图形显示协议 |
+| `0x0500` - `0x05FF` | **Fossil** | 文件系统协议 (数据) |
+| `0x0600` - `0x06FF` | **Gopher** | 网络协议 (数据) |
+| `0x0700` - `0x07FF` | **Chimera** | 虚拟化协议 |
 
 ## 2. 详细协议定义
 
@@ -59,44 +62,40 @@ Factotum 充当中央进程管理器和异常处理程序。
 | `0x0106` | `MAP_DEVICE` | `[paddr, size, flags]` | `[vaddr]` | 映射物理设备区域（需要特权）。 |
 | `0x0107` | `GET_PID` | `[]` | `[pid]` | 返回当前进程 ID。 |
 
-### 2.2 Gopher 协议 (9P2000)
+### 2.2 通用 9P2000 协议
 
-Gopher 实现了标准的 **9P2000** 协议。Glenda IPC 用作传输层，取代了传统的 TCP 或管道传输。这允许网络透明性和统一的资源接口。
+所有系统服务 (9P, Gopher, Fossil, Unicorn, Chimera 等) 都实现 **9P2000** 协议用于管理和配置。Glenda IPC 用作传输层。
 
 **传输机制:**
-*   **请求**: 客户端构造标准的 9P `T-message` 并将其写入 **UTCB (IPC Buffer)**。
-*   **IPC 调用**: 客户端在 Gopher 的 Endpoint 上调用 `Call`。
+*   **请求**: 客户端构造标准的 9P `T-message` 并将其写入 **UTCB**。
+*   **IPC 调用**: 客户端在服务的 Endpoint 上调用 `Call`。
     *   **标签**: `0x0200` (9P_REQUEST)
-    *   **参数**: `[msg_length, 0, 0, 0,0, 0, 0]`
-*   **响应**: Gopher 处理请求并将相应的 9P `R-message` 写回客户端的 UTCB。
+*   **响应**: 服务写回 `R-message`。
 
 **支持的 9P 操作:**
-
-| 9P 消息类型 | 描述 | Glenda 实现说明 |
-| :--- | :--- | :--- |
-| `Tversion` / `Rversion` | 协议版本协商 | 协商缓冲区大小 (msize) |
-| `Tauth` / `Rauth` | 认证 | 可以使用 Capabilities 进行认证 |
-| `Tattach` / `Rattach` | 建立到根的连接 | 返回根 `fid` |
-| `Twalk` / `Rwalk` | 遍历目录层次结构 | 逐个组件解析路径 |
-| `Topen` / `Ropen` | 打开文件 | 准备 `fid` 用于 I/O |
-| `Tcreate` / `Rcreate` | 创建文件 | 在父目录中创建文件 |
-| `Tread` / `Rread` | 读取数据 | 数据在 UTCB 中返回（或共享内存） |
-| `Twrite` / `Rwrite` | 写入数据 | 数据通过 UTCB 发送（或共享内存） |
-| `Tclunk` / `Rclunk` | 关闭 fid | 释放句柄 |
-| `Tremove` / `Rremove` | 删除文件 | 删除文件 |
-| `Tstat` / `Rstat` | 获取属性 | 检索文件元数据 |
-| `Twstat` / `Rwstat` | 设置属性 | 更新文件元数据 |
-
-**大 I/O 优化 (零拷贝):**
-由于 UTCB 大小有限（通常为 4KB），标准的 `Tread`/`Twrite` 对于大数据效率低下。
-*   **共享内存**: 客户端可以将 Frame Capability（共享内存）传递给 Gopher。
-*   **批量 IO**: 可以使用专门的扩展或单独的 `READ_BULK` / `WRITE_BULK` 方法直接向/从共享帧传输数据，绕过消息复制。
+参考标准 9P2000 规范。
 
 ### 2.3 Unicorn 协议 (设备驱动)
 
 Unicorn 管理设备发现、中断路由和 DMA 内存分配。
 
 **基准协议 ID**: `0x0300`
+
+### 2.4 专用数据平面协议
+
+虽然 9P2000 用于管理，但数据密集型服务 (Gopher, Fossil) 使用专用协议来提高性能。
+
+#### Fossil 块协议 (0x0500)
+用于块级访问或批量文件 I/O。
+*   `READ_BLOCKS`, `WRITE_BLOCKS` 使用共享内存描述符。
+
+#### Gopher 网络协议 (0x0600)
+用于数据包 I/O。
+*   `TX_PACKET`, `RX_POLL` 使用环形缓冲区。
+
+#### Chimera VM 协议 (0x0700)
+用于控制 VM。
+*   `VM_ENTER`, `VM_EXIT`, `INJECT_IRQ`。
 
 | ID | 方法 | 参数 | 返回值 | 描述 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -160,9 +159,11 @@ Rio 实现了一个 **Wayland 兼容** 的合成器。它使用 Glenda IPC 作�
 | `2` | `CNODE_SELF` | CNode | 自身 CNode 的 Capability |
 | `3` | `VSPACE_SELF` | PageTable | 自身 VSpace (根页表) 的 Capability |
 | `4` | `EP_FACTOTUM` | Endpoint | **到 Factotum 的 IPC 通道** (进程管理) |
-| `5` | `EP_GOPHER` | Endpoint | **到 Gopher 的 IPC 通道** (VFS 根) |
-| `6` | `EP_UNICORN` | Endpoint | 到 Unicorn 的 IPC 通道 (可选/仅驱动) |
-| `7` | `EP_RIO` | Endpoint | 到 Rio 的 IPC 通道 (可选/仅 GUI 应用) |
+| `5` | `EP_GOPHER` | Endpoint | **到 Gopher 的 IPC 通道** (网络栈) |
+| `6` | `EP_UNICORN` | Endpoint | 到 Unicorn 的 IPC 通道 (设备管理) |
+| `7` | `EP_RIO` | Endpoint | 到 Rio 的 IPC 通道 (GUI) |
+| `8` | `EP_FOSSIL` | Endpoint | **到 Fossil 的 IPC 通道** (文件系统) |
+| `9` | `EP_CHIMERA` | Endpoint | 到 Chimera 的 IPC 通道 (虚拟化) |
 | `10` | `FD_STDIN` | Endpoint/File | 标准输入 |
 | `11` | `FD_STDOUT` | Endpoint/File | 标准输出 |
 | `12` | `FD_STDERR` | Endpoint/File | 标准错误 |
@@ -181,7 +182,7 @@ pub trait ProcessManager {
     fn get_pid(&self) -> Pid;
 }
 
-/// Gopher 客户端接口 (9P2000 抽象)
+/// Fossil 客户端接口 (9P2000 抽象)
 pub trait FileSystem {
     fn attach(&self, uname: &str, aname: &str) -> Result<Fid, Error>;
     fn walk(&self, fid: Fid, new_fid: Fid, names: &[&str]) -> Result<(), Error>;

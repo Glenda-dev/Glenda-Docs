@@ -1,72 +1,89 @@
-# 系统调用接口设计
+# 系统调用接口 (System Call Interface)
 
 ## 1. 概述
 
-Glenda 微内核使用统一的、基于 capability 的调用模型。所有内核服务不是通过系统调用号（例如在 `a7` 中）索引的传统系统调用表访问，而是通过调用 **Capability 指针 (CPtr)** 访问。
-
-## 2. 统一调用接口
-
-通过 `ecall` 指令进入内核的入口点只有一个。内核根据寄存器中提供的 capability 确定操作。
+Glenda 使用统一的、基于 Capability 的调用模型。所有内核服务均通过 `ecall` 指令调用 **Capability 指针 (CPtr)** 来访问。
 
 ### 寄存器约定 (RISC-V)
 
 | 寄存器 | 名称 | 描述 |
 | :--- | :--- | :--- |
-| **`a0`** | `cptr` | 指向目标内核对象的 Capability 指针。 |
-| **`a7`** | `method` | 方法 ID |
-| **`a1 - a6`** | `args / MRs` | 用于参数或 IPC 数据消息寄存器 (MR0-MR5)。 |
+| **`a0`** | `cptr` | 被调用对象的 Capability 指针。 |
+| **`a7`** | `method` | 方法 ID (取决于对象类型)。 |
+| **`a1 - a6`** | `args` | 参数 (存储在 UTCB MR0-MR5 中，但部分快速路径可直接使用寄存器)。 |
 
-## 3. 内核对象方法
+> 注意：参数通常由用户库 (`libglenda`) 编组到 UTCB 中，但为了性能，某些调用可能直接使用寄存器传递参数。
 
-当调用 capability 时，`Method ID` 决定操作。
+## 2. 对象方法
 
-### 3.1 IPC Endpoint
-| 方法 | ID | 描述 |
-| :--- | :--- | :--- |
-| **`Send`** | 1 | 向端点发送 IPC 消息。 |
-| **`Recv`** | 2 | 从端点接收 IPC 消息。 |
-| **`Call`** | 3 | 发送消息并等待回复 (RPC)。 |
-| **`Notify`** | 4 | 向端点发送通知（信号）。 |
+### 2.1 IPC 端点 (`Endpoint`)
 
-### 3.2 Reply 对象
-| 方法 | ID | 描述 |
-| :--- | :--- | :--- |
-| **`Reply`** | 1 | 回复 `Call` 操作。 |
+| 方法 | ID | 参数 | 描述 |
+| :--- | :-- | :--- | :--- |
+| **`Send`** | 1 | - | 发送 IPC 消息。若无接收者则阻塞。 |
+| **`Recv`** | 2 | - | 等待 IPC 消息。 |
+| **`Call`** | 3 | - | 发送并等待回复 (RPC)。 |
+| **`Notify`**| 4 | - | 发送通知 (Signal)。 |
 
-### 3.3 线程控制块 (TCB)
+### 2.2 线程控制块 (`TCB`)
 
-| 方法 | ID | 描述 |
-| :--- | :--- | :--- |
-| **`Configure`** | 1 | 设置 CSpace, VSpace, UTCB 和 Fault Handler。 |
-| **`SetPriority`** | 2 | 设置线程的调度优先级。 |
-| **`SetRegisters`** | 3 | 设置线程的 CPU 寄存器。 |
-| **`Resume/Suspend`** | 4/5 | 控制线程执行状态。 |
+| 方法 | ID | 参数 | 描述 |
+| :--- | :-- | :--- | :--- |
+| **`Configure`** | 1 | `cspace, vspace, utcb, tf, kstack` | 设置能力空间和相关缓冲区。 |
+| **`SetPriority`**| 2 | `prio` | 设置调度优先级 (0-255)。 |
+| **`SetEntry`**   | 3 | `pc, sp, tp` | 设置线程入口点、栈指针和 TLS。 |
+| **`SetFaultHandler`**| 4 | `ep_cptr` | 设置异常处理端点。 |
+| **`SetAffinity`**| 5 | `cpu_id` | 设置 CPU 亲和性。 |
+| **`SetRegisters`**| 6 | `regs...` | 写入通用寄存器。 |
+| **`Resume`** | 7 | - | 恢复线程执行。 |
+| **`Suspend`** | 8 | - | 挂起线程执行。 |
 
-### 3.3 Page Table
+### 2.3 Capability 节点 (`CNode`)
 
-| 方法 | ID | 描述 |
-| :--- | :--- | :--- |
-| **`Map`** | 1 | 将物理页映射到页表。 |
-| **`Unmap`** | 2 | 从页表取消映射页。 |
+| 方法 | ID | 参数 | 描述 |
+| :--- | :-- | :--- | :--- |
+| **`Mint`** | 1 | `src, dest, badge, rights` | 创建带有可选 Badge/权限的新 Cap。 |
+| **`Copy`** | 2 | `src, dest, rights` | 复制 Cap 到另一槽位。 |
+| **`Delete`** | 3 | `slot` | 删除槽位中的 Cap。 |
+| **`Revoke`** | 4 | `slot` | 递归删除该 Cap 的所有派生副本。 |
+| **`Debug`** | 5 | - | 输出 CNode 信息到内核日志。 |
 
-### 3.4 CNode (Capability 空间)
+### 2.4 虚拟地址空间 (`VSpace`)
 
-| 方法 | ID | 描述 |
-| :--- | :--- | :--- |
-| **`Mint`** | 1 | 创建具有指定权限的新 capability。 |
-| **`Copy`** | 2 | 复制现有的 capability。 |
-| **`Delete`** | 3 | 删除 capability。 |
-| **`Revoke`** | 4 | 撤销 capability 及其派生。 |
+| 方法 | ID | 参数 | 描述 |
+| :--- | :-- | :--- | :--- |
+| **`Map`** | 1 | `frame_cap, vaddr, flags` | 将 Frame 映射到虚拟地址空间。 |
+| **`Unmap`** | 2 | `vaddr, size` | 解除虚拟内存映射。 |
+| **`MapTable`**| 3 | `table_cap, vaddr, level` | 映射下一级页表。 |
+| **`Setup`** | 4 | - | 初始化 VSpace 根页表。 |
+| **`Debug`** | 5 | - | 输出 PageTable 信息到内核日志。 |
 
-### 3.5 Untyped 内存
-| 方法 | ID | 描述 |
-| :--- | :--- | :--- |
-| **`Retype`** | 1 | 将 untyped 内存重类型化为内核对象。 |
+### 2.5 页表 (`PageTable`)
 
-### 3.6 IRQ Handler
-| 方法 | ID | 描述 |
-| :--- | :--- | :--- |
-| **`SetNotification`** | 1 | 设置 IRQ 的通知端点。 |
-| **`Acknowledge`** | 2 | 确认 IRQ。 |
-| **`ClearNotification`** | 3 | 清除 IRQ 的通知端点。 |
-| **`SetPriority`** | 4 | 设置 IRQ 优先级。 |
+| 方法 | ID | 参数 | 描述 |
+| :--- | :-- | :--- | :--- |
+| **`MapTable`**| 1 | `table_cap, vaddr, level` | 链接子页表。 |
+
+### 2.6 非类型化内存 (`Untyped`)
+
+| 方法 | ID | 参数 | 描述 |
+| :--- | :-- | :--- | :--- |
+| **`Retype`** | 1 | `type, flags, cnode, slot` | 从非类型化内存创建内核对象。 |
+
+### 2.7 中断处理程序 (`IrqHandler`)
+
+| 方法 | ID | 参数 | 描述 |
+| :--- | :-- | :--- | :--- |
+| **`SetNotify`**| 1 | `ep_cptr` | 将 IRQ 绑定到通知端点。 |
+| **`Ack`** | 2 | - | 确认中断 (EOI)。 |
+| **`Clear`** | 3 | - | 解除通知绑定。 |
+| **`SetPriority`**| 4 | `prio` | 设置 IRQ 硬件优先级。 |
+
+### 2.8 内核资源 (`Kernel`)
+
+| 方法 | ID | 参数 | 描述 |
+| :--- | :-- | :--- | :--- |
+| **`PutStr`** | 1 | - | 输出字符串到调试控制台。 |
+| **`GetChar`** | 2 | - | 从调试控制台读取字符。 |
+| **`GetStr`** | 3 | - | 从调试控制台读取字符串。 |
+| **`Shell`** | 4 | - | 进入内核调试 Shell。 |

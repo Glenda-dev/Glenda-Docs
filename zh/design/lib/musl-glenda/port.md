@@ -53,7 +53,7 @@ long glenda_syscall_handler(long n, long a1, long a2, long a3, long a4, long a5,
 需要与 Glenda 的内存管理服务交互，分配和映射内存页。
 
 #### `open` / `read`
-需要与 VFS 服务 (Factotum) 交互。
+需要与文件系统服务 (Fossil) 交互。
 
 ## 3. 构建系统
 

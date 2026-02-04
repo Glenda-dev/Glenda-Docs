@@ -1,72 +1,89 @@
-# System Call Interface Design
+# System Call Interface
 
 ## 1. Overview
 
-The Glenda microkernel uses a unified, capability-based invocation model. Instead of a traditional syscall table indexed by a syscall number (e.g., in `a7`), all kernel services are accessed by invoking a **Capability Pointer (CPtr)**.
-
-## 2. Unified Invocation Interface
-
-There is only one entry point to the kernel via the `ecall` instruction. The kernel determines the operation based on the capability provided in the registers.
+Glenda uses a unified, capability-based invocation model. All kernel services are accessed by invoking a **Capability Pointer (CPtr)** via the `ecall` instruction.
 
 ### Register Convention (RISC-V)
 
 | Register | Name | Description |
 | :--- | :--- | :--- |
-| **`a0`** | `cptr` | The Capability Pointer to the target kernel object. |
-| **`a7`** | `method` | Method ID |
-| **`a1 - a6`** | `args / MRs` | Message Registers (MR0-MR5) for arguments or IPC data. |
+| **`a0`** | `cptr` | The Capability Pointer to the invoked object. |
+| **`a7`** | `method` | Method ID (specific to object type). |
+| **`a1 - a6`** | `args` | Arguments (MR0-MR5 in UTCB, but passed via registers for fastpath). |
 
-## 3. Kernel Object Methods
+> Note: Arguments are typically marshaled into the UTCB by the user library (`libglenda`), but some fastpath calls may use registers directly.
 
-When a capability is invoked, the `Method ID` determines the operation.
+## 2. Object Methods
 
-### 3.1 IPC Endpoint
-| Method | ID | Description |
-| :--- | :--- | :--- |
-| **`Send`** | 1 | Send an IPC message to the endpoint. |
-| **`Recv`** | 2 | Receive an IPC message from the endpoint. |
-| **`Call`** | 3 | Send a message and wait for a reply (RPC). |
-| **`Notify`** | 4 | Send a notification (signal) to the endpoint. |
+### 2.1 IPC Endpoint (`Endpoint`)
 
-### 3.2 Reply Object
-| Method | ID | Description |
-| :--- | :--- | :--- |
-| **`Reply`** | 1 | Reply to a `Call` operation. |
+| Method | ID | Arguments | Description |
+| :--- | :-- | :--- | :--- |
+| **`Send`** | 1 | - | Send an IPC message. Blocks if no receiver. |
+| **`Recv`** | 2 | - | Wait for an IPC message. |
+| **`Call`** | 3 | - | Send and wait for reply. |
+| **`Notify`**| 4 | - | Send a notification (signal). |
 
-### 3.3 Thread Control Block (TCB)
+### 2.2 Thread Control Block (`TCB`)
 
-| Method | ID | Description |
-| :--- | :--- | :--- |
-| **`Configure`** | 1 | Set CSpace, VSpace, UTCB and Fault Handler. |
-| **`SetPriority`** | 2 | Set the thread's scheduling priority. |
-| **`SetRegisters`** | 3 | Set the thread's CPU registers. |
-| **`Resume/Suspend`** | 4/5 | Control thread execution state. |
+| Method | ID | Arguments | Description |
+| :--- | :-- | :--- | :--- |
+| **`Configure`** | 1 | `cspace, vspace, utcb, tf, kstack` | Set capability spaces and buffers. |
+| **`SetPriority`**| 2 | `prio` | Set scheduling priority (0-255). |
+| **`SetEntry`**   | 3 | `pc, sp, tp` | Set thread entry point and stack pointer. |
+| **`SetFaultHandler`**| 4 | `ep_cptr` | Set exception handler endpoint. |
+| **`SetAffinity`**| 5 | `cpu_id` | Set CPU affinity. |
+| **`SetRegisters`**| 6 | `regs...` | Write generic registers. |
+| **`Resume`** | 7 | - | Resume thread execution. |
+| **`Suspend`** | 8 | - | Suspend thread execution. |
 
-### 3.3 Page Table
+### 2.3 Capability Node (`CNode`)
 
-| Method | ID | Description |
-| :--- | :--- | :--- |
-| **`Map`** | 1 | Map a physical page into the page table. |
-| **`Unmap`** | 2 | Unmap a page from the page table. |
+| Method | ID | Arguments | Description |
+| :--- | :-- | :--- | :--- |
+| **`Mint`** | 1 | `src, dest, badge, rights` | Create a new cap with optional badge/rights. |
+| **`Copy`** | 2 | `src, dest, rights` | Copy a cap to another slot. |
+| **`Delete`** | 3 | `slot` | Delete a cap from a slot. |
+| **`Revoke`** | 4 | `slot` | Recursively delete children of a cap. |
+| **`Debug`** | 5 | - | Dump CNode info to kernel log. |
 
-### 3.4 CNode (Capability Space)
+### 2.4 Virtual Space (`VSpace`)
 
-| Method | ID | Description |
-| :--- | :--- | :--- |
-| **`Mint`** | 1 | Create a new capability with specified rights. |
-| **`Copy`** | 2 | Copy an existing capability. |
-| **`Delete`** | 3 | Delete a capability. |
-| **`Revoke`** | 4 | Revoke a capability and its derivatives. |
+| Method | ID | Arguments | Description |
+| :--- | :-- | :--- | :--- |
+| **`Map`** | 1 | `frame_cap, vaddr, flags` | Map a frame into virtual address space. |
+| **`Unmap`** | 2 | `vaddr, size` | Unmap a range of virtual memory. |
+| **`MapTable`**| 3 | `table_cap, vaddr, level` | Map a lower-level page table. |
+| **`Setup`** | 4 | - | Initialize VSpace root. |
+| **`Debug`** | 5 | - | Dump PageTable info to kernel log. |
 
-### 3.5 Untyped Memory
-| Method | ID | Description |
-| :--- | :--- | :--- |
-| **`Retype`** | 1 | Retype untyped memory into kernel objects. |
+### 2.5 Page Table (`PageTable`)
 
-### 3.6 IRQ Handler
-| Method | ID | Description |
-| :--- | :--- | :--- |
-| **`SetNotification`** | 1 | Set the notification endpoint for the IRQ. |
-| **`Acknowledge`** | 2 | Acknowledge the IRQ. |
-| **`ClearNotification`** | 3 | Clear the notification endpoint for the IRQ. |
-| **`SetPriority`** | 4 | Set the IRQ priority. |
+| Method | ID | Arguments | Description |
+| :--- | :-- | :--- | :--- |
+| **`MapTable`**| 1 | `table_cap, vaddr, level` | Link a sub-page table. |
+
+### 2.6 Untyped Memory (`Untyped`)
+
+| Method | ID | Arguments | Description |
+| :--- | :-- | :--- | :--- |
+| **`Retype`** | 1 | `type, flags, cnode, slot` | Create objects from untyped memory. |
+
+### 2.7 Interrupt Handler (`IrqHandler`)
+
+| Method | ID | Arguments | Description |
+| :--- | :-- | :--- | :--- |
+| **`SetNotify`**| 1 | `ep_cptr` | Bind IRQ to a notification endpoint. |
+| **`Ack`** | 2 | - | Acknowledge interrupt (EOI). |
+| **`Clear`** | 3 | - | Unbind notification. |
+| **`SetPriority`**| 4 | `prio` | Set IRQ hardware priority. |
+
+### 2.8 Kernel Resource (`Kernel`)
+
+| Method | ID | Arguments | Description |
+| :--- | :-- | :--- | :--- |
+| **`PutStr`** | 1 | - | Write string to debug console. |
+| **`GetChar`** | 2 | - | Read char from debug console. |
+| **`GetStr`** | 3 | - | Read string from debug console. |
+| **`Shell`** | 4 | - | Enter kernel debug shell. |

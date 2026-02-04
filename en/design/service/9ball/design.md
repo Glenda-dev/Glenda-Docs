@@ -52,7 +52,9 @@ After the boot sequence is complete, 9Ball enters a blocking loop waiting for IP
 9Ball is responsible for ensuring the following services are running:
 1.  **Factotum**: Exception & Task Manager (The "Kernel" of user space).
 2.  **Unicorn**: Device Driver Manager.
-3.  **Gopher**: VFS and Namespace Server.
+3.  **Gopher**: Network Stack.
+4.  **Fossil**: File System Server.
+5.  **Chimera**: Virtualization Manager.
 4.  **Rio**: Windowing and Display Server (optional for headless).
 
 ## 6. Log Management

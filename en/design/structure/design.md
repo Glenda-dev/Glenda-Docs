@@ -13,9 +13,12 @@ graph TD
     subgraph User Space
         9Ball[9Ball (Root Task)]
         Factotum[Factotum (Process/Fault Mgr)]
-        Gopher[Gopher (Namespace/VFS)]
+        9P[9P (Namespace Server)]
+        Gopher[Gopher (Network Stack)]
+        Fossil[Fossil (File System)]
         Unicorn[Unicorn (Driver Mgr)]
-        Tux[Tux (POSIX Server)]
+        Chimera[Chimera (Virtualization)]
+        Tux[Tux (L4Linux Server)]
         App[User Applications]
     end
     subgraph Kernel Space
@@ -24,10 +27,17 @@ graph TD
 
     9Ball --> Kernel
     Factotum --> Kernel
+    9P --> Kernel
     Gopher --> Kernel
+    Fossil --> Kernel
     Unicorn --> Kernel
+    Chimera --> Kernel
+    Tux --> Kernel
     App --> Factotum
+    App --> 9P
     App --> Gopher
+    App --> Fossil
+    App --> Chimera
     App --> Tux
 \`\`\`
 
@@ -66,43 +76,79 @@ Glenda's functionality is primarily provided by a set of cooperating user-space 
     *   **Process Management**: Responsible for process creation (Spawn), destruction, and lifecycle management.
     *   **Memory Management**: Maintains the address space layout of processes, handles page faults, and implements strategies like Copy-On-Write (COW).
 
-### 3.3 Gopher (Namespace & VFS Server)
-*   **Role**: Resource manager, implementing a namespace similar to Plan 9.
+### 3.3 9P (Namespace Server)
+*   **Role**: Namespace Manager for the system.
 *   **Responsibilities**:
-    *   **Unified Namespace**: Abstracts all resources (files, devices, network connections, process information) into a file system tree.
-    *   **9P2000 Server**: Implements the full 9P2000 protocol over IPC. All resource access is done via standard 9P messages (Tattach, Twalk, Topen, Tread, Twrite).
-    *   **Protocol Translation**: Acts as a 9P multiplexer/proxy. It forwards 9P requests to specific resource providers (drivers, file systems) or synthesizes responses for virtual files.
+    *   **Unified Namespace**: Manages the global namespace tree, mounting resources from other services (Fossil, Gopher, Unicorn) into a unified hierarchy.
+    *   **Mount Management**: Handles mount/unmount operations.
+    *   **9P2000 Router**: Routes 9P requests to the appropriate service.
 
-### 3.4 Unicorn (Device Driver Manager)
+### 3.4 Gopher (Network Stack)
+*   **Role**: Network stack provider.
+*   **Responsibilities**:
+    *   **Network Management**: Manages network interfaces and routing.
+    *   **TCP/IP Stack**: Implements the TCP/IP protocol stack.
+    *   **9P Interface**: Exposes network stack management interface via 9P2000.
+    *   **Dedicated IPC**: Uses high-performance shared memory IPC for data path.
+
+### 3.5 Fossil (File System Server)
+*   **Role**: Persistent file system server.
+*   **Responsibilities**:
+    *   **Storage Management**: Manages disk storage.
+    *   **File System**: Implements the file system logic.
+    *   **9P Interface**: Exposes file system structure via 9P2000.
+    *   **Dedicated IPC**: Uses specialized IPC protocols for bulk data transfer.
+
+### 3.6 Unicorn (Device Driver Manager)
 *   **Role**: Driver manager.
 *   **Responsibilities**:
     *   Manage hardware device drivers.
-    *   Convert hardware interrupts (IRQ) into IPC messages and send them to driver threads.
-    *   Register device files with Gopher.
+    *   Convert hardware interrupts (IRQ) into IPC messages.
+    *   **9P Interface**: Exposes device files via 9P2000.
 
-### 3.5 Tux (POSIX Server)
-*   **Role**: POSIX compatibility layer.
+### 3.7 Tux (Linux Compatibility Layer)
+*   **Role**: Linux Paravirtualization Compatibility Layer.
 *   **Responsibilities**:
-    *   Provide standard POSIX system call interfaces for normal applications (forwarded via LibC).
-    *   Convert POSIX requests into Glenda's native IPC calls, interacting with Factotum and Gopher.
+    *   **Linux Guest**: Runs as a lightweight paravirtualized Linux guest on top of Chimera.
+    *   **ABI Compatibility**: Provides Linux ABI compatibility for unmodified Linux binaries.
+    *   **9P Interface**: Exposes process info/status via 9P2000.
 
-### 3.6 Rio (Display Manager)
+### 3.8 Rio (Display Manager)
 *   **Role**: Graphics display manager.
 *   **Responsibilities**:
     *   Manage graphics hardware (GPU/Framebuffer).
     *   Provide windowing system and input event dispatching.
+    *   **9P Interface**: Exposes window management via 9P2000.
 
-### 3.7 Shell (Command Line Interface)
+### 3.9 Shell (Command Line Interface)
 *   **Role**: The primary user interface for system interaction.
 *   **Responsibilities**:
     *   **Command Parsing**: Interprets user commands and scripts.
     *   **Process Control**: Launches applications via Factotum (Spawn).
-    *   **File Management**: Interacts with Gopher for file operations.
+    *   **File Management**: Interacts with the Namespace (9P) for file operations.
+
+### 3.10 APE (ANSI/POSIX Environment)
+*   **Role**: System Library Support.
+*   **Responsibilities**:
+    *   **Musl Backend**: Serves as the underlying library for `musl`, implementing the platform adapter.
+    *   **Direct Interaction**: Interacts directly with system services (Gopher, Fossil, Tux) via their specific dedicated IPC protocols, bypassing the general 9P namespace for performance where possible.
+    *   **Protocol Adapter**: Adopts various protocols (e.g., Block I/O, Network Streaming, Framebuffer) to standard POSIX calls.
     *   **Environment**: Manages environment variables and working directories.
+
+### 3.11 Chimera (Virtualization Server)
+*   **Role**: Virtual Machine / Container Monitor (VMM).
+*   **Responsibilities**:
+    *   **Virtualization**: providing hardware virtualization support (using hardware extensions like RISC-V H-Extension or software emulation).
+    *   **Resource Isolation**: Manages isolated environments for guest operating systems or containers.
+    *   **Tux Host**: Serves as the hypervisor/host for the **Tux** Linux compatibility layer.
+    *   **9P Interface**: Exposes VM management via 9P2000.
 
 ## 4. Component Interaction Model
 
-Glenda adopts a Client-Server model. Applications act as Clients, sending requests to Servers via IPC.
+Glenda adopts a hybrid Client-Server model.
 
-*   **System Call Path**: App -> LibC -> IPC -> Tux/Factotum/Gopher -> Kernel
+*   **Data Plane**: Components communicate using **Dedicated IPC Protocols** (e.g., shared memory rings, direct capability invocations) for high-throughput and low-latency operations.
+*   **Control/Management Plane**: All components expose a **9P2000** interface. This provides a uniform way to inspect, configure, and manage every part of the system as a file. The **9P Server** aggregates these into a single namespace.
+
+*   **System Call Path**: App -> LibC -> APE -> IPC (Dedicated Protocol) -> Gopher/Fossil/Chimera -> Kernel
 *   **Exception Handling Path**: App (Fault) -> Kernel -> IPC -> Factotum -> (Fix/Kill) -> Kernel -> App
