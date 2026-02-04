@@ -18,14 +18,29 @@ Tux 通过修改 Linux 内核源代码（针对 Glenda 架构移植），将底�
 2.  **HCall 接口**: 使用 `ecall` (作为 HCall) 直接请求 Gluenda 服务，而不是等待异常捕获。这减少了上下文切换的开销。
 3.  **中断模拟**: 硬件中断以 IPC 消息的形式投递给 Tux，Tux 在其事件循环中处理这些逻辑中断。
 
-## 3. 资源映射
+## 3. 配套服务支持 (Supporting Services)
 
-Tux 不直接控制硬件，而是通过驱动程序桥接即“桩驱动 (Stub Drivers)”与 Glenda 原生服务交互。
+Tux 依赖一套 **Glenda 原生服务** 来运行，有效地将微内核环境视为其“硬件”平台。
 
-*   **Block Device**: Tux 内核包含一个虚拟块设备驱动，将块 I/O 请求转换为对 **Fossil** 或 **Unicorn** 的 IPC 调用。
-*   **Network**: Tux 内核包含一个虚拟网卡驱动，将网络包发送给 **Gopher** 处理。
-*   **Console**: 映射到 **9Ball** 或 **Factotum** 的控制台输出。
-*   **Memory**: Tux 作为其客户端进程的 **Pager (外部缺页处理程序)**。当 Linux 应用发生缺页异常时，Tux 接收 IPC 并通过操纵 Glenda 的页表能力来映射内存。
+### 3.1 VMM 服务 (Chimera/Factotum)
+*   **角色**: 充当 Tux 的引导加载程序和监视器。
+*   **功能**:
+    *   将 L4Linux 二进制文件 (`vmlinux`) 加载到内存中。
+    *   准备 **BootInfo** 页（包含内存映射、命令行参数）。
+    *   提供 **虚拟设备树 (DTB)**，将可用的 IPC 服务描述为伪设备。
+
+### 3.2 设备管理器 (Unicorn)
+*   **角色**: Tux 的“南桥”。
+*   **功能**:
+    *   **中断转发**: Unicorn 接收物理 IRQ 并将其作为异步通知 (Signal) 转发给 Tux。
+    *   **MMIO 直通**: 对于性能关键型设备，Unicorn 可以将物理设备寄存器直接映射到 Tux 的地址空间。
+
+### 3.3 I/O 后端
+Tux 使用半虚拟化驱动程序 (`virtio-glenda`) 与 I/O 服务通信。
+
+*   **块存储**: 连接到 **Fossil**。Tux 看到一个块设备；Fossil 处理缓存和磁盘驱动程序。
+*   **网络**: 连接到 **Gopher**。Tux 看到一个标准的 eth0；Gopher 处理协议卸载或原始数据包传递。
+*   **控制台**: 连接到 **9Ball** 以进行日志记录和 TTY 访问。
 
 ## 4. 管理与互通 (Management & Interoperability)
 

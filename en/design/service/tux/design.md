@@ -18,14 +18,29 @@ Tux achieves paravirtualization by modifying the Linux kernel source code (porti
 2.  **HCall Interface**: Uses `ecall` (as HCall) to directly request Glenda services, avoiding the overhead of passive exception trapping.
 3.  **Interrupt Emulation**: Hardware interrupts are delivered to Tux as IPC messages, which Tux handles within its event loop as logical interrupts.
 
-## 3. Resource Mapping
+## 3. Supporting Services
 
-Tux does not control hardware directly. Instead, it interacts with Glenda native services via "Stub Drivers".
+Tux relies on a suite of **Glenda Native Services** to function, effectively treating the microkernel environment as its "hardware" platform.
 
-*   **Block Device**: The Tux kernel includes a virtual block driver that translates block I/0 requests into IPC calls to **Fossil** or **Unicorn**.
-*   **Network**: The Tux kernel includes a virtual NIC driver that sends network packets to **Gopher**.
-*   **Console**: Mapped to **9Ball** or **Factotum** console output.
-*   **Memory**: Tux acts as the **Pager (External Faulter)** for its client processes. When a Linux app triggers a page fault, Tux receives an IPC and maps memory by manipulating Glenda specific page table capabilities.
+### 3.1 VMM Service (Chimera/Factotum)
+*   **Role**: Acts as the bootloader and monitor for Tux.
+*   **Function**:
+    *   Loads the L4Linux binary (`vmlinux`) into memory.
+    *   Prepares the **BootInfo** page (containing memory map, command line).
+    *   Provides a **Virtual Device Tree (DTB)** describing available IPC services as pseudo-devices.
+
+### 3.2 Device Manager (Unicorn)
+*   **Role**: The "Southbridge" for Tux.
+*   **Function**:
+    *   **Interrupt Forwarding**: Unicorn receives physical IRQs and forwards them to Tux as asynchronous notifications (Signals).
+    *   **MMIO Passthrough**: For performance-critical devices, Unicorn can map physical device registers directly into Tux's address space.
+
+### 3.3 I/O Backends
+Tux uses paravirtualized drivers (`virtio-glenda`) to talk to I/O services.
+
+*   **Block Storage**: Connects to **Fossil**. Tux sees a block device; Fossil handles caching and disk drivers.
+*   **Network**: Connects to **Gopher**. Tux sees a standard eth0; Gopher handles protocol offload or raw packet passing.
+*   **Console**: Connects to **9Ball** for logging and TTY access.
 
 ## 4. Management & Interoperability
 
