@@ -6,7 +6,7 @@
   * [ ] musl-glenda C Library
 * [ ] Services
   * [ ] 9Ball Root Task (System Bootstrapper)
-  * [ ] Factotum Exception Manager and Task Manager
+  * [ ] Warren Exception Manager and Task Manager
     * [ ] Thread Manager
       * [ ] ELF Loader
       * [ ] COW Forking

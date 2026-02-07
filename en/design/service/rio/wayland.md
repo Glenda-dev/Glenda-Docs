@@ -4,7 +4,7 @@ This document details the steps to implement the Wayland protocol support in Rio
 
 ## 1. Overview
 
-Rio will act as a Wayland Compositor. The implementation will leverage the Rust ecosystem (specifically `wayland-server`) to handle the protocol serialization and state management, while integrating with Glenda's native subsystems (Factotum for memory, Unicorn for input/output).
+Rio will act as a Wayland Compositor. The implementation will leverage the Rust ecosystem (specifically `wayland-server`) to handle the protocol serialization and state management, while integrating with Glenda's native subsystems (Warren for memory, Unicorn for input/output).
 
 ## 2. Prerequisites
 

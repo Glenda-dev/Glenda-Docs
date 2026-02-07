@@ -9,7 +9,7 @@ Unicorn 是 Glenda 的设备驱动管理器。在微内核中，驱动程序作�
     *   解析设备树 (DTB) 或扫描总线 (PCIe, USB) 以枚举可用硬件。
 *   **驱动加载**:
     *   维护可用驱动程序的注册表（映射 Device ID -> Driver Binary）。
-    *   请求 Factotum 启动驱动程序进程。
+    *   请求 Warren 启动驱动程序进程。
 *   **资源委派**:
     *   将 MMIO 帧 capabilities 和 IRQ 处理程序 capabilities 授予特定的驱动程序进程。
 *   **IOMMU 管理**:
@@ -45,7 +45,7 @@ Unicorn 采用元数据驱动的机制来管理驱动程序与硬件的绑定。
 2.  **匹配流程**:
     *   **注册**: Unicorn 启动时扫描系统驱动目录，解析所有清单并建立匹配表。
     *   **发现**: Unicorn 扫描 DTB 或枚举 PCI 总线以发现硬件设备。
-    *   **绑定**: 对于每个设备，Unicorn 在匹配表中查找对应的驱动。如果找到，则请求 Factotum 启动驱动进程，并将设备 Capability 传递给它。
+    *   **绑定**: 对于每个设备，Unicorn 在匹配表中查找对应的驱动。如果找到，则请求 Warren 启动驱动进程，并将设备 Capability 传递给它。
 
 ## 4. 支持的子系统
 *   **UART**: 串行控制台。

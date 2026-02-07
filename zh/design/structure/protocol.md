@@ -36,7 +36,7 @@ struct MsgTag {
 | 范围 | 服务 | 描述 |
 | :--- | :--- | :--- |
 | `0x0000` - `0x00FF` | **Generic** | 通用控制协议 (Ping, Debug) |
-| `0x0100` - `0x01FF` | **Factotum** | 进程和线程管理 |
+| `0x0100` - `0x01FF` | **Warren** | 进程和线程管理 |
 | `0x0200` - `0x02FF` | **9P Server** | 通用命名空间和资源访问 (所有服务通用) |
 | `0x0300` - `0x03FF` | **Unicorn** | 设备驱动控制 |
 | `0x0400` - `0x04FF` | **Rio** | 图形显示协议 |
@@ -46,9 +46,9 @@ struct MsgTag {
 
 ## 2. 详细协议定义
 
-### 2.1 Factotum 协议 (进程与内存)
+### 2.1 Warren 协议 (进程与内存)
 
-Factotum 充当中央进程管理器和异常处理程序。
+Warren 充当中央进程管理器和异常处理程序。
 
 **基准协议 ID**: `0x0100`
 
@@ -130,11 +130,11 @@ Rio 实现了一个 **Wayland 兼容** 的合成器。它使用 Glenda IPC 作�
 
 ### 2.5 异常处理协议
 
-当线程发生异常时，内核发送给注册的 Fault Handler（通常是 Factotum）的消息。
+当线程发生异常时，内核发送给注册的 Fault Handler（通常是 Warren）的消息。
 
 **缺页异常 (标签: 0xFFFF)**
 *   **发送者**: Kernel
-*   **接收者**: Factotum
+*   **接收者**: Warren
 *   **Payload**:
     *   `Arg0`: `scause` (异常原因)
     *   `Arg1`: `stval` (出错的虚拟地址)
@@ -142,7 +142,7 @@ Rio 实现了一个 **Wayland 兼容** 的合成器。它使用 Glenda IPC 作�
 
 **通用异常 (标签: 0xFFFE)**
 *   **发送者**: Kernel
-*   **接收者**: Factotum
+*   **接收者**: Warren
 *   **Payload**:
     *   `Arg0`: `scause`
     *   `Arg1`: `stval`
@@ -150,7 +150,7 @@ Rio 实现了一个 **Wayland 兼容** 的合成器。它使用 Glenda IPC 作�
 
 ## 3. 进程 Capability 空间 (CSpace) 布局
 
-为了与系统组件通信，进程必须拥有相应的 **Endpoint Capabilities**。当 Factotum 生成新进程时，它会用这些“众所周知的 Capabilities”填充新进程的 CSpace。
+为了与系统组件通信，进程必须拥有相应的 **Endpoint Capabilities**。当 Warren 生成新进程时，它会用这些“众所周知的 Capabilities”填充新进程的 CSpace。
 
 | CPtr (索引) | 名称 | 类型 | 描述 |
 | :--- | :--- | :--- | :--- |
@@ -158,7 +158,7 @@ Rio 实现了一个 **Wayland 兼容** 的合成器。它使用 Glenda IPC 作�
 | `1` | `TCB_SELF` | TCB | 自身 TCB 的 Capability |
 | `2` | `CNODE_SELF` | CNode | 自身 CNode 的 Capability |
 | `3` | `VSPACE_SELF` | PageTable | 自身 VSpace (根页表) 的 Capability |
-| `4` | `EP_FACTOTUM` | Endpoint | **到 Factotum 的 IPC 通道** (进程管理) |
+| `4` | `EP_FACTOTUM` | Endpoint | **到 Warren 的 IPC 通道** (进程管理) |
 | `5` | `EP_GOPHER` | Endpoint | **到 Gopher 的 IPC 通道** (网络栈) |
 | `6` | `EP_UNICORN` | Endpoint | 到 Unicorn 的 IPC 通道 (设备管理) |
 | `7` | `EP_RIO` | Endpoint | 到 Rio 的 IPC 通道 (GUI) |
@@ -171,7 +171,7 @@ Rio 实现了一个 **Wayland 兼容** 的合成器。它使用 Glenda IPC 作�
 ## 4. 接口定义 (Rust Trait 示例)
 
 ```rust
-/// Factotum 客户端接口 (进程管理)
+/// Warren 客户端接口 (进程管理)
 pub trait ProcessManager {
     fn spawn(&self, name: &str) -> Result<Pid, Error>;
     fn exit(&self, status: usize) -> !;

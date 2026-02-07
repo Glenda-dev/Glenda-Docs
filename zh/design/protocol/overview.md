@@ -32,7 +32,7 @@ Glenda 采用分层协议架构：
 | :--- | :--- | :--- | :--- |
 | **Generic** | `0x000` | 通用回复 | [generic.md](generic.md) |
 | **Kernel** | `0x100 - 0x1FF` | 内核核心操作 | [kernel.md](kernel.md) |
-| **Process** (Factotum) | `0x200 - 0x2FF` | 进程生命周期 | [process.md](process.md) |
+| **Process** (Warren) | `0x200 - 0x2FF` | 进程生命周期 | [process.md](process.md) |
 | **Device** (Unicorn) | `0x300 - 0x3FF` | 设备管理 | [device.md](device.md) |
 | **Init** | `0x400 - 0x4FF` | 启动协议 | [init.md](init.md) |
 | **Fossil** | `0x500 - 0x5FF` | 文件系统控制 | [fs.md](fs.md) |

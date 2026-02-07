@@ -16,7 +16,7 @@ APE maintains a routing table in the process's user-space memory, mapping file d
 
 | FD Range | Type | Backend Service | Protocol |
 | :--- | :--- | :--- | :--- |
-| `0, 1, 2` | Stdio | **Factotum** / **Rio** | Ring Buffer / serialized IO |
+| `0, 1, 2` | Stdio | **Warren** / **Rio** | Ring Buffer / serialized IO |
 | `3...N` | Files | **Fossil** | 9P2000 + SHM |
 | `M...P` | Sockets | **Gopher** | Dedicated Socket IPC |
 | `X...Y` | Devices | **Unicorn** | Device Specific IPC |
@@ -30,12 +30,12 @@ Glenda apps don't speak to a central VFS kernel object. APE maintains a lightwei
 *   **FD Table**: `Vec<FileEntry>` mapping `int fd` to `{ Capability, Offset, Flags }`.
 
 ### 3.2 Signal Emulation
-*   **Receiver**: Registers an IPC endpoint with **Factotum** to receive "Software Interrupts".
+*   **Receiver**: Registers an IPC endpoint with **Warren** to receive "Software Interrupts".
 *   **Dispatcher**: When a signal IPC arrives, APE interrupts the main thread (or uses a helper thread) to execute the registered POSIX signal handler.
 
 ### 3.3 Process primitives
-*   `fork()`: Implemented via **Factotum** (creating a new task, COW memory).
-*   `exec()`: Loading a new ELF via **Factotum**.
+*   `fork()`: Implemented via **Warren** (creating a new task, COW memory).
+*   `exec()`: Loading a new ELF via **Warren**.
 
 ## 4. Usage Modes
 

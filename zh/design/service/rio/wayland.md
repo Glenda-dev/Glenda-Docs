@@ -4,7 +4,7 @@
 
 ## 1. 概述
 
-Rio 将充当 Wayland 合成器。该实现将利用 Rust 生态系统（特别是 `wayland-server`）来处理协议序列化和状态管理，同时与 Glenda 的原生子系统（用于内存的 Factotum，用于输入/输出的 Unicorn）集成。
+Rio 将充当 Wayland 合成器。该实现将利用 Rust 生态系统（特别是 `wayland-server`）来处理协议序列化和状态管理，同时与 Glenda 的原生子系统（用于内存的 Warren，用于输入/输出的 Unicorn）集成。
 
 ## 2. 先决条件
 

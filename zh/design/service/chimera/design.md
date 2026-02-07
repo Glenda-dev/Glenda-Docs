@@ -7,7 +7,7 @@ Chimera 是 Glenda 的 **虚拟化管理器 (VMM)**。它抽象了硬件虚拟�
 
 *   **HVM 辅助**: 支持硬件虚拟机。
 *   **资源分区**: 分配第二阶段页表 (Stage-2 Page Tables)，即客户机物理地址 (GPA) 到宿主机物理地址 (HPA) 的转换。
-*   **vCPU 调度**: 将 Guest vCPU 映射到由 Factotum 管理的 Glenda 线程。
+*   **vCPU 调度**: 将 Guest vCPU 映射到由 Warren 管理的 Glenda 线程。
 *   **设备模拟**: 可选地提供设备模型（通常委托给用户态后端驱动程序，如 Tux 或 Unicorn）。
 
 ## 3. 架构

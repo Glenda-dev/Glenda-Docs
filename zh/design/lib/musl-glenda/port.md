@@ -26,7 +26,7 @@ Musl 依赖于 Linux 风格的系统调用。我们需要拦截这些系统调�
 我们将修改 `__syscall_N` 宏，使其调用 `libglenda` 提供的系统调用处理函数，而不是执行 `ecall` 指令（或者在 `ecall` 处理程序中进行转换，但在用户态转换更灵活）。
 
 **方案 A: 用户态模拟 (推荐)**
-在 `syscall_arch.h` 中，将 `__syscall` 重定向到一个名为 `glenda_syscall_handler` 的函数。该函数根据系统调用号（如 `SYS_write`, `SYS_open`）构造相应的 Glenda IPC 消息，发送给相应的服务（如 Factotum, Gopher）。
+在 `syscall_arch.h` 中，将 `__syscall` 重定向到一个名为 `glenda_syscall_handler` 的函数。该函数根据系统调用号（如 `SYS_write`, `SYS_open`）构造相应的 Glenda IPC 消息，发送给相应的服务（如 Warren, Gopher）。
 
 ```c
 // arch/riscv64/syscall_arch.h

@@ -1,7 +1,7 @@
-# Factotum Design Document
+# Warren Design Document
 
 ## 1. Introduction
-Factotum is the central resource and task manager of the Glenda microkernel system. While the kernel provides mechanisms (capabilities, threads, address spaces), Factotum provides the *policy* and high-level management. It acts as the "kernel" of the user space.
+Warren is the central resource and task manager of the Glenda microkernel system. While the kernel provides mechanisms (capabilities, threads, address spaces), Warren provides the *policy* and high-level management. It acts as the "kernel" of the user space.
 
 ## 2. Responsibilities
 
@@ -11,7 +11,7 @@ Factotum is the central resource and task manager of the Glenda microkernel syst
     *   Handles page faults for user processes (lazy allocation, COW).
 *   **Process & Thread Management**:
     *   **ELF Loading**: Parses ELF binaries and sets up the initial VSpace (Virtual Address Space).
-    *   **Scheduling Policy**: While the kernel schedules threads, Factotum manages thread priorities and time slice allocation (via kernel capability manipulation).
+    *   **Scheduling Policy**: While the kernel schedules threads, Warren manages thread priorities and time slice allocation (via kernel capability manipulation).
     *   **Lifecycle**: Handles process creation (`spawn`) and destruction (`kill`).
     *   **Multi-threading**:
         *   Manages thread groups (all threads sharing the same VSpace).
@@ -25,20 +25,20 @@ Factotum is the central resource and task manager of the Glenda microkernel syst
 
 ## 3. Architecture
 
-Factotum runs as a high-priority service. It maintains a table of all running processes (Process Control Blocks - PCBs) in its own address space.
+Warren runs as a high-priority service. It maintains a table of all running processes (Process Control Blocks - PCBs) in its own address space.
 
 ### Interaction with 9Ball
-9Ball bootstraps Factotum. Once running, Factotum takes over the responsibility of creating future processes requested by 9Ball or other services.
+9Ball bootstraps Warren. Once running, Warren takes over the responsibility of creating future processes requested by 9Ball or other services.
 
 ### Interaction with Clients
-Clients (like Tux or Gopher) request Factotum to:
+Clients (like Tux or Gopher) request Warren to:
 *   `yield`: Give up CPU.
 *   `map_memory`: Request shared memory.
 *   `spawn_thread`: Create a new thread within an existing PD.
 
 ## 4. Interfaces
 
-Factotum exposes its functionality via the **Factotum Protocol** (ID `0x0100`).
+Warren exposes its functionality via the **Warren Protocol** (ID `0x0100`).
 
 ### 4.1 Process Lifecycle
 *   `SPAWN(name_ptr, name_len, flags) -> [pid]`
@@ -93,4 +93,4 @@ Factotum exposes its functionality via the **Factotum Protocol** (ID `0x0100`).
 ### 4.5 Capability Brokerage
 *   `REQUEST_CAP(service_id) -> []` (Cap transfer via IPC)
     *   Requests a handle to a system service (e.g., Gopher, Rio).
-    *   Factotum verifies permissions before granting.
+    *   Warren verifies permissions before granting.

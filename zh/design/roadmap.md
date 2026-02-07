@@ -6,7 +6,7 @@
   * [ ] musl-glenda C 库
 * [ ] Services (服务)
   * [ ] 9Ball Root Task (系统引导程序)
-  * [ ] Factotum 异常管理器和任务管理器
+  * [ ] Warren 异常管理器和任务管理器
     * [ ] 线程管理器
       * [ ] ELF 加载器
       * [ ] COW (写时复制) Fork

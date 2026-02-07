@@ -9,7 +9,7 @@ Unicorn is the Device Driver Manager for Glenda. In a microkernel, drivers run a
     *   Parses the Device Tree (DTB) or scans buses (PCIe, USB) to enumerate available hardware.
 *   **Driver Loading**:
     *   Maintains a registry of available drivers (mapping Device ID -> Driver Binary).
-    *   Requests Factotum to spawn driver processes.
+    *   Requests Warren to spawn driver processes.
 *   **Resource Delegation**:
     *   Grants MMIO frame capabilities and IRQ handler capabilities to the specific driver process.
 *   **IOMMU Management**:
@@ -45,7 +45,7 @@ Unicorn uses a metadata-driven mechanism to manage the binding between drivers a
 2.  **Matching Process**:
     *   **Registration**: Upon startup, Unicorn scans the system driver directory, parses all manifests, and builds a matching table.
     *   **Discovery**: Unicorn scans the DTB or enumerates the PCI bus to discover hardware devices.
-    *   **Binding**: For each device, Unicorn looks up the corresponding driver in the matching table. If found, it requests Factotum to spawn the driver process and passes the Device Capability to it.
+    *   **Binding**: For each device, Unicorn looks up the corresponding driver in the matching table. If found, it requests Warren to spawn the driver process and passes the Device Capability to it.
 
 ## 4. Supported Subsystems
 *   **UART**: Serial consoles.

@@ -22,7 +22,7 @@ Tux achieves paravirtualization by modifying the Linux kernel source code (porti
 
 Tux relies on a suite of **Glenda Native Services** to function, effectively treating the microkernel environment as its "hardware" platform.
 
-### 3.1 VMM Service (Chimera/Factotum)
+### 3.1 VMM Service (Chimera/Warren)
 *   **Role**: Acts as the bootloader and monitor for Tux.
 *   **Function**:
     *   Loads the L4Linux binary (`vmlinux`) into memory.

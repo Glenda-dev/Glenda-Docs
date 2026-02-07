@@ -32,7 +32,7 @@ Specific command sets for core services, defined by unique **Protocol Labels**. 
 | :--- | :--- | :--- | :--- |
 | **Generic** | `0x000` | Generic replies | [generic.md](generic.md) |
 | **Kernel** | `0x100 - 0x1FF` | Kernel Core operations | [kernel.md](kernel.md) |
-| **Process** (Factotum) | `0x200 - 0x2FF` | Process Lifecycle | [process.md](process.md) |
+| **Process** (Warren) | `0x200 - 0x2FF` | Process Lifecycle | [process.md](process.md) |
 | **Device** (Unicorn) | `0x300 - 0x3FF` | Device Management | [device.md](device.md) |
 | **Init** | `0x400 - 0x4FF` | Startup protocols | [init.md](init.md) |
 | **Fossil** | `0x500 - 0x5FF` | Filesystem Control | [fs.md](fs.md) |

@@ -1,7 +1,7 @@
-# Factotum 设计文档
+# Warren 设计文档
 
 ## 1. 简介
-Factotum 是 Glenda 微内核系统的中央资源和任务管理器。虽然内核提供了机制（capabilities, 线程, 地址空间），但 Factotum 提供了 *策略* 和高级管理。它充当用户空间的“内核”。
+Warren 是 Glenda 微内核系统的中央资源和任务管理器。虽然内核提供了机制（capabilities, 线程, 地址空间），但 Warren 提供了 *策略* 和高级管理。它充当用户空间的“内核”。
 
 ## 2. 职责
 
@@ -11,7 +11,7 @@ Factotum 是 Glenda 微内核系统的中央资源和任务管理器。虽然内
     *   处理用户进程的缺页异常（延迟分配，COW）。
 *   **进程与线程管理**:
     *   **ELF 加载**: 解析 ELF 二进制文件并设置初始 VSpace（虚拟地址空间）。
-    *   **调度策略**: 虽然内核调度线程，但 Factotum 管理线程优先级和时间片分配（通过内核 capability 操作）。
+    *   **调度策略**: 虽然内核调度线程，但 Warren 管理线程优先级和时间片分配（通过内核 capability 操作）。
     *   **生命周期**: 处理进程创建 (`spawn`) 和销毁 (`kill`)。
     *   **多线程**:
         *   管理线程组（共享相同 VSpace 的所有线程）。
@@ -25,20 +25,20 @@ Factotum 是 Glenda 微内核系统的中央资源和任务管理器。虽然内
 
 ## 3. 架构
 
-Factotum 作为高优先级服务运行。它在自己的地址空间中维护所有运行进程的表（进程控制块 - PCB）。
+Warren 作为高优先级服务运行。它在自己的地址空间中维护所有运行进程的表（进程控制块 - PCB）。
 
 ### 与 9Ball 的交互
-9Ball 引导 Factotum。一旦运行，Factotum 接管创建 9Ball 或其他服务请求的未来进程的责任。
+9Ball 引导 Warren。一旦运行，Warren 接管创建 9Ball 或其他服务请求的未来进程的责任。
 
 ### 与客户端的交互
-客户端（如 Tux 或 Gopher）请求 Factotum：
+客户端（如 Tux 或 Gopher）请求 Warren：
 *   `yield`: 放弃 CPU。
 *   `map_memory`: 请求共享内存。
 *   `spawn_thread`: 在现有 PD 中创建新线程。
 
 ## 4. 接口
 
-Factotum 通过 **Factotum 协议** (ID `0x0100`) 暴露其功能。
+Warren 通过 **Warren 协议** (ID `0x0100`) 暴露其功能。
 
 ### 4.1 进程生命周期
 *   `SPAWN(name_ptr, name_len, flags) -> [pid]`
@@ -92,4 +92,4 @@ Factotum 通过 **Factotum 协议** (ID `0x0100`) 暴露其功能。
 ### 4.5 Capability 代理
 *   `REQUEST_CAP(service_id) -> []` (通过 IPC 传输 Cap)
     *   请求系统服务的句柄（例如 Gopher, Rio）。
-    *   Factotum 在授予之前验证权限。
+    *   Warren 在授予之前验证权限。

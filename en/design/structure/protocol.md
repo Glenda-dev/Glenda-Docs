@@ -36,7 +36,7 @@ Labels are used to distinguish different service requests or event types.
 | Range | Service | Description |
 | :--- | :--- | :--- |
 | `0x0000` - `0x00FF` | **Generic** | Generic Control Protocols (Ping, Debug) |
-| `0x0100` - `0x01FF` | **Factotum** | Process and Thread Management |
+| `0x0100` - `0x01FF` | **Warren** | Process and Thread Management |
 | `0x0200` - `0x02FF` | **9P Server** | General Namespace & Resource Access (Common to all services) |
 | `0x0300` - `0x03FF` | **Unicorn** | Device Driver Control |
 | `0x0400` - `0x04FF` | **Rio** | Graphics Display Protocol |
@@ -46,9 +46,9 @@ Labels are used to distinguish different service requests or event types.
 
 ## 2. Detailed Protocol Definitions
 
-### 2.1 Factotum Protocol (Process & Memory)
+### 2.1 Warren Protocol (Process & Memory)
 
-Factotum acts as the central process manager and exception handler.
+Warren acts as the central process manager and exception handler.
 
 **Base Protocol ID**: `0x0100`
 
@@ -146,11 +146,11 @@ Rio implements a **Wayland-compatible** compositor. It uses Glenda IPC as the tr
 
 ### 2.5 Fault Handler Protocol
 
-Messages sent by the kernel to the registered Fault Handler (usually Factotum) when a thread exception occurs.
+Messages sent by the kernel to the registered Fault Handler (usually Warren) when a thread exception occurs.
 
 **Page Fault (Label: 0xFFFF)**
 *   **Sender**: Kernel
-*   **Receiver**: Factotum
+*   **Receiver**: Warren
 *   **Payload**:
     *   `Arg0`: `scause` (Exception Cause)
     *   `Arg1`: `stval` (Faulting Virtual Address)
@@ -158,7 +158,7 @@ Messages sent by the kernel to the registered Fault Handler (usually Factotum) w
 
 **General Exception (Label: 0xFFFE)**
 *   **Sender**: Kernel
-*   **Receiver**: Factotum
+*   **Receiver**: Warren
 *   **Payload**:
     *   `Arg0`: `scause`
     *   `Arg1`: `stval`
@@ -166,7 +166,7 @@ Messages sent by the kernel to the registered Fault Handler (usually Factotum) w
 
 ## 3. Process Capability Space (CSpace) Layout
 
-To communicate with system components, a process must possess the corresponding **Endpoint Capabilities**. When Factotum spawns a new process, it populates the new process's CSpace with these "Well-known Capabilities".
+To communicate with system components, a process must possess the corresponding **Endpoint Capabilities**. When Warren spawns a new process, it populates the new process's CSpace with these "Well-known Capabilities".
 
 | CPtr (Index) | Name | Type | Description |
 | :--- | :--- | :--- | :--- |
@@ -174,7 +174,7 @@ To communicate with system components, a process must possess the corresponding 
 | `1` | `TCB_SELF` | TCB | Capability to self TCB |
 | `2` | `CNODE_SELF` | CNode | Capability to self CNode |
 | `3` | `VSPACE_SELF` | PageTable | Capability to self VSpace (Root PageTable) |
-| `4` | `EP_FACTOTUM` | Endpoint | **IPC Channel to Factotum** (Process Mgr) |
+| `4` | `EP_FACTOTUM` | Endpoint | **IPC Channel to Warren** (Process Mgr) |
 | `5` | `EP_GOPHER` | Endpoint | **IPC Channel to Gopher** (Network Stack) |
 | `6` | `EP_UNICORN` | Endpoint | IPC Channel to Unicorn (Device Mgr) |
 | `7` | `EP_RIO` | Endpoint | IPC Channel to Rio (GUI) |
@@ -187,7 +187,7 @@ To communicate with system components, a process must possess the corresponding 
 ## 4. Interface Definition (Rust Trait Example)
 
 ```rust
-/// Factotum Client Interface (Process Management)
+/// Warren Client Interface (Process Management)
 pub trait ProcessManager {
     fn spawn(&self, name: &str) -> Result<Pid, Error>;
     fn exit(&self, status: usize) -> !;

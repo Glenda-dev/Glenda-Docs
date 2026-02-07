@@ -1,13 +1,13 @@
 # 9Ball Design Document
 
 ## 1. Introduction
-9Ball is the Root Task (Process ID 1 equivalent) of the Glenda operating system. It is the first user-space program launched by the kernel. Its primary role is to bootstrap the user-space environment, specifically initializing the `Factotum` service manager, and then coordinating the startup of other essential system services.
+9Ball is the Root Task (Process ID 1 equivalent) of the Glenda operating system. It is the first user-space program launched by the kernel. Its primary role is to bootstrap the user-space environment, specifically initializing the `Warren` service manager, and then coordinating the startup of other essential system services.
 
 ## 2. Responsibilities
 
 *   **System Bootstrap**: Initialize the global capability space and essential resources handed over by the kernel.
-*   **Factotum Initialization**: Load and start the `Factotum` service. Since `Factotum` is the Task Manager, 9Ball must perform the initial loading of Factotum manually (using `libglenda` helpers) before it can delegate process creation to Factotum.
-*   **Service Orchestration**: Once Factotum is running, 9Ball acts as the system configuration manager, instructing Factotum to launch other core services (e.g., Unicorn, Gopher, Rio) based on a configuration.
+*   **Warren Initialization**: Load and start the `Warren` service. Since `Warren` is the Task Manager, 9Ball must perform the initial loading of Warren manually (using `libglenda` helpers) before it can delegate process creation to Warren.
+*   **Service Orchestration**: Once Warren is running, 9Ball acts as the system configuration manager, instructing Warren to launch other core services (e.g., Unicorn, Gopher, Rio) based on a configuration.
 *   **System Monitoring**: After bootstrap, 9Ball enters a supervision loop, monitoring the liveness of critical services and handling system-wide power states (shutdown/reboot).
 *   **Log Management**: Capture and buffer logs from early-boot services before a dedicated logging daemon is available.
 
@@ -16,31 +16,31 @@
 ### Phase 1: Kernel Handover
 The kernel starts 9Ball and grants it all available system resources (Untyped Memory, IRQ capabilities, Device Frames, etc.) via the initial capability space (CSpace).
 
-### Phase 2: Launching Factotum
-1.  9Ball locates the `Factotum` binary (typically provided as a boot module by the bootloader).
-2.  9Ball creates a new Protection Domain (CSpace and VSpace) for Factotum.
-3.  **Resource Delegation**: 9Ball transfers the majority of system resources (Untyped Memory, IRQ control) to Factotum. This allows Factotum to fulfill its role as the memory and task manager for the rest of the system.
-4.  9Ball starts the Factotum thread.
+### Phase 2: Launching Warren
+1.  9Ball locates the `Warren` binary (typically provided as a boot module by the bootloader).
+2.  9Ball creates a new Protection Domain (CSpace and VSpace) for Warren.
+3.  **Resource Delegation**: 9Ball transfers the majority of system resources (Untyped Memory, IRQ control) to Warren. This allows Warren to fulfill its role as the memory and task manager for the rest of the system.
+4.  9Ball starts the Warren thread.
 
 ### Phase 3: Launching System Services
-Once Factotum is active, 9Ball establishes an IPC channel with it. 9Ball then proceeds to launch other services by sending requests to Factotum.
+Once Warren is active, 9Ball establishes an IPC channel with it. 9Ball then proceeds to launch other services by sending requests to Warren.
 
 **Workflow for starting a service (e.g., Gopher):**
 1.  9Ball reads the service binary in initrd.
-2.  9Ball sends a `CreateProcess` IPC message to Factotum, providing the binary data or location.
-3.  Factotum parses the ELF, allocates memory, and creates the thread.
-4.  Factotum returns the process handle to 9Ball.
+2.  9Ball sends a `CreateProcess` IPC message to Warren, providing the binary data or location.
+3.  Warren parses the ELF, allocates memory, and creates the thread.
+4.  Warren returns the process handle to 9Ball.
 5.  9Ball sends a `Start` message to the new process.
 
 ### Phase 4: Supervision Loop
 After the boot sequence is complete, 9Ball enters a blocking loop waiting for IPC messages or fault notifications.
-*   **Fault Handling**: If a critical service crashes, Factotum (as the exception handler) might notify 9Ball.
+*   **Fault Handling**: If a critical service crashes, Warren (as the exception handler) might notify 9Ball.
 *   **System Power**: 9Ball handles requests for shutdown or reboot.
 
 ## 4. Interfaces
 
-### Interaction with Factotum
-9Ball acts as a client to Factotum for process management.
+### Interaction with Warren
+9Ball acts as a client to Warren for process management.
 
 *   **Interface**: `org.glenda.proc.Manager` (Conceptual)
 *   **Methods**:
@@ -50,7 +50,7 @@ After the boot sequence is complete, 9Ball enters a blocking loop waiting for IP
 
 ## 5. Critical Services List
 9Ball is responsible for ensuring the following services are running:
-1.  **Factotum**: Exception & Task Manager (The "Kernel" of user space).
+1.  **Warren**: Exception & Task Manager (The "Kernel" of user space).
 2.  **Unicorn**: Device Driver Manager.
 3.  **Gopher**: Network Stack.
 4.  **Fossil**: File System Server.
@@ -64,7 +64,7 @@ After the boot sequence is complete, 9Ball enters a blocking loop waiting for IP
 ### Early Boot Logging
 Before the display server (Rio) or the POSIX server (Tux) are active, 9Ball acts as the primary log sink.
 1.  **Kernel Console**: 9Ball utilizes the kernel's debug printing facility (e.g., `sys_debug_print`) to output critical boot milestones to the serial console.
-2.  **Service Output Capture**: When 9Ball instructs Factotum to spawn a service, it provides a capability for an IPC endpoint or a shared memory ring buffer to be used as the service's `stdout`/`stderr`.
+2.  **Service Output Capture**: When 9Ball instructs Warren to spawn a service, it provides a capability for an IPC endpoint or a shared memory ring buffer to be used as the service's `stdout`/`stderr`.
 
 ### Log Buffering
 9Ball maintains an in-memory **Ring Buffer** (e.g., 64KB) to store logs from all supervised services.

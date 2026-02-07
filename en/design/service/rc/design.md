@@ -1,7 +1,7 @@
 # Rc Shell Design Document
 
 ## 1. Introduction
-**Rc** is the default command-line shell for Glenda. It is a port/re-implementation of the Plan 9 `rc` shell, adapted for Glenda's microkernel architecture. It serves as the primary user interface for interacting with Factotum (process control) and Gopher (file operations).
+**Rc** is the default command-line shell for Glenda. It is a port/re-implementation of the Plan 9 `rc` shell, adapted for Glenda's microkernel architecture. It serves as the primary user interface for interacting with Warren (process control) and Gopher (file operations).
 
 ## 2. Design Philosophy
 *   **Simplicity**: C-like syntax but cleaner (no `sh` quirks).
@@ -18,8 +18,8 @@ Rc uses a C-inspired syntax:
 *   **Functions**: `fn name { commands }`.
 
 ### 3.2 Process Control
-Rc interacts with **Factotum** to manage processes:
-*   **Execution**: `cmd args` translates to `Factotum::SPAWN`.
+Rc interacts with **Warren** to manage processes:
+*   **Execution**: `cmd args` translates to `Warren::SPAWN`.
 *   **Pipelines**: `cmd1 | cmd2` creates a pipe via Gopher, spawns both processes, and connects their FDs.
 *   **Background**: `cmd &` spawns asynchronously.
 
@@ -36,7 +36,7 @@ Rc exposes Gopher's namespace operations as built-in commands:
 *   `mount`: Mount a service.
 *   `bind`: Bind a directory.
 *   `unmount`: Unmount.
-*   `rfork`: Create a new namespace (calls `Factotum::SPAWN` with `RFNOMNT` or similar syscall).
+*   `rfork`: Create a new namespace (calls `Warren::SPAWN` with `RFNOMNT` or similar syscall).
 
 ## 4. Architecture
 
@@ -44,10 +44,10 @@ Rc exposes Gopher's namespace operations as built-in commands:
 *   **Lexer/Parser**: Parses the Rc script/command line.
 *   **Executor**: Walks the AST and executes commands.
 *   **Builtins**: Internal commands (`cd`, `echo`, `exit`, `mount`, `bind`).
-*   **Job Control**: Tracks background processes (PIDs returned by Factotum).
+*   **Job Control**: Tracks background processes (PIDs returned by Warren).
 
 ### 4.2 Interaction with System Services
-*   **Factotum**:
+*   **Warren**:
     *   `SPAWN`: Launch programs.
     *   `WAIT`: Wait for child processes.
 *   **Gopher**:
@@ -55,7 +55,7 @@ Rc exposes Gopher's namespace operations as built-in commands:
     *   `PIPE`: Create pipes.
     *   `MOUNT/BIND`: Namespace operations.
 *   **Tux**:
-    *   Rc itself is a POSIX-like application, likely linked against `libglenda` or a libc that talks to Tux/Factotum.
+    *   Rc itself is a POSIX-like application, likely linked against `libglenda` or a libc that talks to Tux/Warren.
 
 ## 5. Example Script
 
@@ -87,7 +87,7 @@ hello $1
 
 ## 6. Implementation Plan
 1.  **Core**: Lexer, Parser, AST.
-2.  **Execution**: Simple command execution (Factotum SPAWN).
+2.  **Execution**: Simple command execution (Warren SPAWN).
 3.  **I/O**: Redirection and Pipes (Gopher integration).
 4.  **Variables & Control Flow**: Full language support.
 5.  **Builtins**: `cd`, `mount`, `bind`.

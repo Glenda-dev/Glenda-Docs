@@ -12,7 +12,7 @@ Glenda's system architecture is divided into two layers:
 graph TD
     subgraph User Space
         9Ball[9Ball (Root Task)]
-        Factotum[Factotum (Process/Fault Mgr)]
+        Warren[Warren (Process/Fault Mgr)]
         9P[9P (Namespace Server)]
         Gopher[Gopher (Network Stack)]
         Fossil[Fossil (File System)]
@@ -26,14 +26,14 @@ graph TD
     end
 
     9Ball --> Kernel
-    Factotum --> Kernel
+    Warren --> Kernel
     9P --> Kernel
     Gopher --> Kernel
     Fossil --> Kernel
     Unicorn --> Kernel
     Chimera --> Kernel
     Tux --> Kernel
-    App --> Factotum
+    App --> Warren
     App --> 9P
     App --> Gopher
     App --> Fossil
@@ -66,13 +66,13 @@ Glenda's functionality is primarily provided by a set of cooperating user-space 
 *   **Role**: The first user-space process of the system (PID 1).
 *   **Responsibilities**:
     *   Take over all remaining system resources handed over by the kernel (Untyped Memory, IO, IRQ Caps).
-    *   Responsible for starting and bootstrapping other core system services (Factotum, Gopher, Unicorn, etc.).
+    *   Responsible for starting and bootstrapping other core system services (Warren, Gopher, Unicorn, etc.).
     *   Allocate resources to the corresponding services.
 
-### 3.2 Factotum (Exception & Task Manager)
+### 3.2 Warren (Exception & Task Manager)
 *   **Role**: The system's "steward", responsible for process and thread management.
 *   **Responsibilities**:
-    *   **Exception Handling**: Registered as the Fault Handler for all normal processes. When a page fault or illegal operation occurs, the kernel sends a message to Factotum for handling.
+    *   **Exception Handling**: Registered as the Fault Handler for all normal processes. When a page fault or illegal operation occurs, the kernel sends a message to Warren for handling.
     *   **Process Management**: Responsible for process creation (Spawn), destruction, and lifecycle management.
     *   **Memory Management**: Maintains the address space layout of processes, handles page faults, and implements strategies like Copy-On-Write (COW).
 
@@ -124,7 +124,7 @@ Glenda's functionality is primarily provided by a set of cooperating user-space 
 *   **Role**: The primary user interface for system interaction.
 *   **Responsibilities**:
     *   **Command Parsing**: Interprets user commands and scripts.
-    *   **Process Control**: Launches applications via Factotum (Spawn).
+    *   **Process Control**: Launches applications via Warren (Spawn).
     *   **File Management**: Interacts with the Namespace (9P) for file operations.
 
 ### 3.10 APE (ANSI/POSIX Environment)
@@ -151,4 +151,4 @@ Glenda adopts a hybrid Client-Server model.
 *   **Control/Management Plane**: All components expose a **9P2000** interface. This provides a uniform way to inspect, configure, and manage every part of the system as a file. The **9P Server** aggregates these into a single namespace.
 
 *   **System Call Path**: App -> LibC -> APE -> IPC (Dedicated Protocol) -> Gopher/Fossil/Chimera -> Kernel
-*   **Exception Handling Path**: App (Fault) -> Kernel -> IPC -> Factotum -> (Fix/Kill) -> Kernel -> App
+*   **Exception Handling Path**: App (Fault) -> Kernel -> IPC -> Warren -> (Fix/Kill) -> Kernel -> App

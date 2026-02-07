@@ -22,7 +22,7 @@ Tux 通过修改 Linux 内核源代码（针对 Glenda 架构移植），将底�
 
 Tux 依赖一套 **Glenda 原生服务** 来运行，有效地将微内核环境视为其“硬件”平台。
 
-### 3.1 VMM 服务 (Chimera/Factotum)
+### 3.1 VMM 服务 (Chimera/Warren)
 *   **角色**: 充当 Tux 的引导加载程序和监视器。
 *   **功能**:
     *   将 L4Linux 二进制文件 (`vmlinux`) 加载到内存中。

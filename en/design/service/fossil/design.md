@@ -21,8 +21,8 @@ Fossil supports multiple filesystem implementations via a modular backend trait.
     *   Data is copied directly from File Cache to Client Buffer without intermediate marshalling.
 
 ### 2.3 Caching
-Fossil integrates with **Factotum**'s memory manager.
-*   **Page Cache**: Uses a unified page cache where clean pages can be evicted by the kernel/Factotum under memory pressure.
+Fossil integrates with **Warren**'s memory manager.
+*   **Page Cache**: Uses a unified page cache where clean pages can be evicted by the kernel/Warren under memory pressure.
 
 ## 3. Interfaces
 

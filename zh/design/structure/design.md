@@ -12,7 +12,7 @@ Glenda 的系统架构分为两层：
 graph TD
     subgraph User Space
         9Ball[9Ball (Root Task)]
-        Factotum[Factotum (进程/异常管理)]
+        Warren[Warren (进程/异常管理)]
         9P[9P (命名空间服务器)]
         Gopher[Gopher (网络栈)]
         Fossil[Fossil (文件系统)]
@@ -26,14 +26,14 @@ graph TD
     end
 
     9Ball --> Kernel
-    Factotum --> Kernel
+    Warren --> Kernel
     9P --> Kernel
     Gopher --> Kernel
     Fossil --> Kernel
     Unicorn --> Kernel
     Chimera --> Kernel
     Tux --> Kernel
-    App --> Factotum
+    App --> Warren
     App --> 9P
     App --> Gopher
     App --> Fossil
@@ -66,13 +66,13 @@ Glenda 的功能主要由一组协作的用户空间服务提供。
 *   **角色**：系统的第一个用户空间进程 (PID 1)。
 *   **职责**：
     *   接管内核移交的所有剩余系统资源（Untyped 内存、IO、IRQ Caps）。
-    *   负责启动和引导其他核心系统服务（Factotum, Gopher, Unicorn 等）。
+    *   负责启动和引导其他核心系统服务（Warren, Gopher, Unicorn 等）。
     *   向相应的服务分配资源。
 
-### 3.2 Factotum (异常与任务管理器)
+### 3.2 Warren (异常与任务管理器)
 *   **角色**：系统的“管家”，负责进程和线程管理。
 *   **职责**：
-    *   **异常处理**：注册为所有普通进程的 Fault Handler。当发生缺页异常或非法操作时，内核发送消息给 Factotum 处理。
+    *   **异常处理**：注册为所有普通进程的 Fault Handler。当发生缺页异常或非法操作时，内核发送消息给 Warren 处理。
     *   **进程管理**：负责进程的创建 (Spawn)、销毁和生命周期管理。
     *   **内存管理**：维护进程的地址空间布局，处理缺页异常，实现写时复制 (COW) 等策略。
 
@@ -124,7 +124,7 @@ Glenda 的功能主要由一组协作的用户空间服务提供。
 *   **角色**：系统交互的主要用户界面。
 *   **职责**：
     *   **命令解析**：解释用户命令和脚本。
-    *   **进程控制**：通过 Factotum 启动应用程序 (Spawn)。
+    *   **进程控制**：通过 Warren 启动应用程序 (Spawn)。
     *   **文件管理**：与命名空间 (9P) 交互进行文件操作。
 
 ### 3.10 APE (ANSI/POSIX Environment)
@@ -151,4 +151,4 @@ Glenda 采用混合的 Client-Server 模型。
 *   **控制/管理平面 (Control/Management Plane)**：所有组件都暴露 **9P2000** 接口。这为以文件形式检查、配置和管理系统的每个部分提供了统一的方式。**9P 服务器** 将这些聚合为一个单一的命名空间。
 
 *   **系统调用路径**：App -> LibC -> APE -> IPC (专用协议) -> Gopher/Fossil/Chimera -> Kernel
-*   **异常处理路径**：App (Fault) -> Kernel -> IPC -> Factotum -> (Fix/Kill) -> Kernel -> App
+*   **异常处理路径**：App (Fault) -> Kernel -> IPC -> Warren -> (Fix/Kill) -> Kernel -> App

@@ -16,7 +16,7 @@ APE 在进程的用户空间内存中维护一个路由表，将文件描述符 
 
 | FD 范围 | 类型 | 后端服务 | 协议 |
 | :--- | :--- | :--- | :--- |
-| `0, 1, 2` | 标准IO | **Factotum** / **Rio** | Ring Buffer / 序列化 IO |
+| `0, 1, 2` | 标准IO | **Warren** / **Rio** | Ring Buffer / 序列化 IO |
 | `3...N` | 文件 | **Fossil** | 9P2000 + SHM |
 | `M...P` | 套接字 | **Gopher** | APE 专用 Socket IPC |
 | `X...Y` | 设备 | **Unicorn** | 设备特定 IPC |
@@ -30,12 +30,12 @@ Glenda 应用程序不与中央 VFS 内核对象对话。APE 在用户空间维�
 *   **FD 表**: 映射 `int fd` 到 `{ Capability, Offset, Flags }` 的 `Vec<FileEntry>`。
 
 ### 3.2 信号模拟 (Signal Emulation)
-*   **接收器**: 在 **Factotum** 注册一个 IPC 端点以接收“软件中断”。
+*   **接收器**: 在 **Warren** 注册一个 IPC 端点以接收“软件中断”。
 *   **分发器**: 当信号 IPC 到达时，APE 中断主线程（或使用辅助线程）以执行注册的 POSIX 信号处理程序。
 
 ### 3.3 进程原语
-*   `fork()`: 通过 **Factotum** 实现（创建新任务，COW 内存）。
-*   `exec()`: 通过 **Factotum** 加载新的 ELF。
+*   `fork()`: 通过 **Warren** 实现（创建新任务，COW 内存）。
+*   `exec()`: 通过 **Warren** 加载新的 ELF。
 
 ## 4. 使用模式
 

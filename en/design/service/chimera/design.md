@@ -7,7 +7,7 @@ Chimera is the **Virtualization Manager** (VMM) for Glenda. It abstracts hardwar
 
 *   **Helper for HVM**: Supports Hardware Virtual Machines.
 *   **Resource Partitioning**: Allocates Stage-2 Page Tables (Guest Physical Address to Host Physical Address translation).
-*   **vCPU Scheduling**: Maps Guest vCPUs to Glenda Threads managed by Factotum.
+*   **vCPU Scheduling**: Maps Guest vCPUs to Glenda Threads managed by Warren.
 *   **Device Emulation**: Optionally provides device models (typically delegated to user-space backend drivers like Tux or Unicorn).
 
 ## 3. Architecture

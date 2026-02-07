@@ -13,8 +13,8 @@
 ## Process Creation (`fork`)
 1. **App** calls `fork()`.
 3. **Tux** receives the request and identifies the caller via its **Badge**.
-4. **Tux** forwards the path lookup to **Factotum (Process Control)**.
-5. **Factotum** clones the address space (COW), creates a new process entry, and returns the new PID to Tux.
+4. **Tux** forwards the path lookup to **Warren (Process Control)**.
+5. **Warren** clones the address space (COW), creates a new process entry, and returns the new PID to Tux.
 6. **Tux** duplicates the FD table for the new process.
-7. **Tux** creates a new thread in the new process via Factotum.
+7. **Tux** creates a new thread in the new process via Warren.
 8. Both parent and child processes resume execution from the `fork()` call, with the child receiving `0` and the parent receiving the child's PID.
