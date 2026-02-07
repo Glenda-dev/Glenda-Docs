@@ -35,14 +35,15 @@ struct MsgTag {
 #### 系统服务标签 (System Service Protocols)
 | 范围 | 服务 | 描述 |
 | :--- | :--- | :--- |
-| `0x0000` - `0x00FF` | **Generic** | 通用控制协议 (Ping, Debug) |
-| `0x0100` - `0x01FF` | **Warren** | 进程和线程管理 |
-| `0x0200` - `0x02FF` | **9P Server** | 通用命名空间和资源访问 (所有服务通用) |
-| `0x0300` - `0x03FF` | **Unicorn** | 设备驱动控制 |
-| `0x0400` - `0x04FF` | **Rio** | 图形显示协议 |
-| `0x0500` - `0x05FF` | **Fossil** | 文件系统协议 (数据) |
-| `0x0600` - `0x06FF` | **Gopher** | 网络协议 (数据) |
-| `0x0700` - `0x07FF` | **Chimera** | 虚拟化协议 |
+| `0x0000` - `0x00FF` | **Generic** | 通用协议 (Ping, Debug) |
+| `0x0100` - `0x01FF` | **Kernel** | 内核协议 |
+| `0x0200` - `0x03FF` | **Warren** | 进程与资源管理协议 |
+| `0x0400` - `0x04FF` | **Unicorn** | 设备协议 |
+| `0x0500` - `0x05FF` | **9Ball** | 初始化协议 |
+| `0x0600` - `0x06FF` | **Fossil** | 文件系统协议 |
+| `0x0700` - `0x07FF` | **Gopher** | 网络协议 |
+| `0x0800` - `0x08FF` | **Factotum** | 认证协议 |
+| `0x0900` - `0x09FF` | **Chimera** | 虚拟化协议 |
 
 ## 2. 详细协议定义
 
@@ -50,7 +51,7 @@ struct MsgTag {
 
 Warren 充当中央进程管理器和异常处理程序。
 
-**基准协议 ID**: `0x0100`
+**基准协议 ID**: `0x0200`
 
 | ID | 方法 | 参数 (UTCB/Regs) | 返回值 | 描述 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -62,40 +63,11 @@ Warren 充当中央进程管理器和异常处理程序。
 | `0x0106` | `MAP_DEVICE` | `[paddr, size, flags]` | `[vaddr]` | 映射物理设备区域（需要特权）。 |
 | `0x0107` | `GET_PID` | `[]` | `[pid]` | 返回当前进程 ID。 |
 
-### 2.2 通用 9P2000 协议
-
-所有系统服务 (9P, Gopher, Fossil, Unicorn, Chimera 等) 都实现 **9P2000** 协议用于管理和配置。Glenda IPC 用作传输层。
-
-**传输机制:**
-*   **请求**: 客户端构造标准的 9P `T-message` 并将其写入 **UTCB**。
-*   **IPC 调用**: 客户端在服务的 Endpoint 上调用 `Call`。
-    *   **标签**: `0x0200` (9P_REQUEST)
-*   **响应**: 服务写回 `R-message`。
-
-**支持的 9P 操作:**
-参考标准 9P2000 规范。
-
-### 2.3 Unicorn 协议 (设备驱动)
+### 2.2 Unicorn 协议 (设备驱动)
 
 Unicorn 管理设备发现、中断路由和 DMA 内存分配。
 
 **基准协议 ID**: `0x0300`
-
-### 2.4 专用数据平面协议
-
-虽然 9P2000 用于管理，但数据密集型服务 (Gopher, Fossil) 使用专用协议来提高性能。
-
-#### Fossil 块协议 (0x0500)
-用于块级访问或批量文件 I/O。
-*   `READ_BLOCKS`, `WRITE_BLOCKS` 使用共享内存描述符。
-
-#### Gopher 网络协议 (0x0600)
-用于数据包 I/O。
-*   `TX_PACKET`, `RX_POLL` 使用环形缓冲区。
-
-#### Chimera VM 协议 (0x0700)
-用于控制 VM。
-*   `VM_ENTER`, `VM_EXIT`, `INJECT_IRQ`。
 
 | ID | 方法 | 参数 | 返回值 | 描述 |
 | :--- | :--- | :--- | :--- | :--- |
@@ -104,31 +76,23 @@ Unicorn 管理设备发现、中断路由和 DMA 内存分配。
 | `0x0303` | `DMA_ALLOC` | `[size]` | `[paddr, vaddr]` | 分配支持 DMA 的连续内存。 |
 | `0x0304` | `DMA_FREE` | `[paddr]` | `[]` | 释放 DMA 内存。 |
 
-### 2.4 Rio 协议 (Wayland Compositor)
+### 2.3 专用数据平面协议
 
-Rio 实现了一个 **Wayland 兼容** 的合成器。它使用 Glenda IPC 作为 Wayland 线路协议的传输层，取代了 Unix 域套接字。
+数据密集型服务 (Gopher, Fossil) 使用专用协议来提高性能。
 
-**传输机制:**
-*   **线路协议**: 标准 Wayland 面向对象协议。
-*   **共享内存**: 用于命令缓冲区（高吞吐量）和像素缓冲区 (`wl_shm`)。
-*   **Capabilities**: 用于传递共享内存句柄（取代文件描述符）。
+#### Fossil 块协议 (0x0600)
+用于块级访问或批量文件 I/O。
+*   `READ_BLOCKS`, `WRITE_BLOCKS` 使用共享内存描述符。
 
-**基准协议 ID**: `0x0400`
+#### Gopher 网络协议 (0x0700)
+用于数据包 I/O。
+*   `TX_PACKET`, `RX_POLL` 使用环形缓冲区。
 
-| ID | 方法 | 参数 | 返回值 | 描述 |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x0401` | `CONNECT` | `[]` | `[conn_id]` | 建立新的 Wayland 客户端连接。 |
-| `0x0402` | `DISPATCH` | `[conn_id]` | `[]` | 通知 Rio 处理共享命令缓冲区中的消息。 |
-| `0x0403` | `GET_EVENT` | `[conn_id]` | `[has_event]` | 检查/等待来自合成器的事件。 |
-| `0x0404` | `PASS_CAP` | `[conn_id, obj_id]` | `[]` | 传输与协议对象关联的 Capability（例如 Frame）。 |
+#### Chimera VM 协议 (0x0900)
+用于控制 VM。
+*   `VM_ENTER`, `VM_EXIT`, `INJECT_IRQ`。
 
-**支持的关键 Wayland 全局对象:**
-*   `wl_compositor`: Surface 创建。
-*   `wl_shm`: 共享内存缓冲区。
-*   `wl_seat`: 输入设备（指针、键盘）。
-*   `xdg_wm_base`: 桌面窗口管理。
-
-### 2.5 异常处理协议
+### 2.4 异常处理协议
 
 当线程发生异常时，内核发送给注册的 Fault Handler（通常是 Warren）的消息。
 

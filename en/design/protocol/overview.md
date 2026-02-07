@@ -14,12 +14,7 @@ Glenda uses a layered protocol approach:
 
 ### 2.2 Layer 1: Transport Protocols
 
-#### A. 9P2000 (Control Plane)
-Used for configuration, namespace management, and low-bandwidth I/O.
-*   **Encapsulation**: 9P messages are packed into the UTCB. If a message exceeds UTCB size, Shared Memory is used.
-*   **Message Types**: `Tattach`, `Twalk`, `Topen`, `Tread`, `Twrite`, `Tclunk`.
-
-#### B. Ring Buffer (Data Plane)
+#### Ring Buffer (Data Plane)
 Used for high-performance data transfer (e.g., Network Packets, Bulk Disk I/O).
 *   **Structure**: Shared Memory Region containing a Descriptor Ring and Data Buffers.
 *   **Signaling**: "Doorbell" IPCs (Notifications) are sent only when necessary to wake the peer.
@@ -44,4 +39,4 @@ Specific command sets for core services, defined by unique **Protocol Labels**. 
 Refer to the specific protocol documents for struct definitions and command IDs.
 
 ### 3.1 Common Types
-Definitions for `Fid` (File ID), `Qid` (Unique ID), `Stat` structs used across the system.
+Definitions for `Stat` structs used across the system.

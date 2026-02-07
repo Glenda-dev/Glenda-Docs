@@ -36,13 +36,14 @@ Labels are used to distinguish different service requests or event types.
 | Range | Service | Description |
 | :--- | :--- | :--- |
 | `0x0000` - `0x00FF` | **Generic** | Generic Control Protocols (Ping, Debug) |
-| `0x0100` - `0x01FF` | **Warren** | Process and Thread Management |
-| `0x0200` - `0x02FF` | **9P Server** | General Namespace & Resource Access (Common to all services) |
-| `0x0300` - `0x03FF` | **Unicorn** | Device Driver Control |
-| `0x0400` - `0x04FF` | **Rio** | Graphics Display Protocol |
-| `0x0500` - `0x05FF` | **Fossil** | File System Protocol (Data) |
-| `0x0600` - `0x06FF` | **Gopher** | Network Protocol (Data) |
-| `0x0700` - `0x07FF` | **Chimera** | Virtualization Protocol |
+| `0x0100` - `0x01FF` | **Kernel** | Kernel Protocol |
+| `0x0200` - `0x03FF` | **Warren** | Process and Resource Management |
+| `0x0400` - `0x04FF` | **Unicorn** | Device Driver Control |
+| `0x0500` - `0x05FF` | **9Ball** | Init Control |
+| `0x0600` - `0x06FF` | **Fossil** | File System Protocol (Data) |
+| `0x0700` - `0x07FF` | **Gopher** | Network Protocol (Data) |
+| `0x0800` - `0x08FF` | **Factotum** | Authentication Protocol |
+| `0x0900` - `0x09FF` | **Chimera** | Virtualization Protocol |
 
 ## 2. Detailed Protocol Definitions
 
@@ -50,7 +51,7 @@ Labels are used to distinguish different service requests or event types.
 
 Warren acts as the central process manager and exception handler.
 
-**Base Protocol ID**: `0x0100`
+**Base Protocol ID**: `0x0200`
 
 | ID | Method | Arguments (UTCB/Regs) | Return Values | Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -62,56 +63,11 @@ Warren acts as the central process manager and exception handler.
 | `0x0106` | `MAP_DEVICE` | `[paddr, size, flags]` | `[vaddr]` | Maps a physical device region (requires privileges). |
 | `0x0107` | `GET_PID` | `[]` | `[pid]` | Returns the current process ID. |
 
-### 2.2 Common 9P2000 Protocol
-
-All system services (9P, Gopher, Fossil, Unicorn, Chimera, etc.) implement the **9P2000** protocol for management and configuration. Glenda IPC serves as the transport layer.
-
-**Transport Mechanism:**
-*   **Request**: The client constructs a standard 9P `T-message` and writes it into the **UTCB**.
-*   **IPC Call**: The client invokes `Call` on the Service's Endpoint.
-    *   **Label**: `0x0200` (9P_REQUEST)
-*   **Response**: Service writes `R-message` back.
-
-**Supported 9P Operations:**
-Refer to the standard 9P2000 specification.
-
-### 2.3 Unicorn Protocol (Device Drivers)
+### 2.2 Unicorn Protocol (Device Drivers)
 
 Unicorn manages device discovery, interrupt routing, and DMA memory allocation.
 
 **Base Protocol ID**: `0x0300`
-
-### 2.4 Dedicated Data Plane Protocols
-
-While 9P2000 is used for management, data intensive services (Gopher, Fossil) use dedicated protocols for performance.
-
-#### Fossil Block Protocol (0x0500)
-Used for block-level access or bulk file I/O.
-*   `READ_BLOCKS`, `WRITE_BLOCKS` using Shared Memory Descriptors.
-
-#### Gopher Net Protocol (0x0600)
-Used for packet I/O.
-*   `TX_PACKET`, `RX_POLL` using Ring Buffers.
-
-#### Chimera VM Protocol (0x0700)
-Used for controlling VMs.
-*   `VM_ENTER`, `VM_EXIT`, `INJECT_IRQ`.
-
-### 2.4 Dedicated Data Plane Protocols
-
-While 9P2000 is used for management, data intensive services (Gopher, Fossil) use dedicated protocols for performance.
-
-#### Fossil Block Protocol (0x0500)
-Used for block-level access or bulk file I/O.
-*   `READ_BLOCKS`, `WRITE_BLOCKS` using Shared Memory Descriptors.
-
-#### Gopher Net Protocol (0x0600)
-Used for packet I/O.
-*   `TX_PACKET`, `RX_POLL` using Ring Buffers.
-
-#### Chimera VM Protocol (0x0700)
-Used for controlling VMs.
-*   `VM_ENTER`, `VM_EXIT`, `INJECT_IRQ`.
 
 | ID | Method | Arguments | Return Values | Description |
 | :--- | :--- | :--- | :--- | :--- |
@@ -120,31 +76,23 @@ Used for controlling VMs.
 | `0x0303` | `DMA_ALLOC` | `[size]` | `[paddr, vaddr]` | Allocates DMA-capable contiguous memory. |
 | `0x0304` | `DMA_FREE` | `[paddr]` | `[]` | Frees DMA memory. |
 
-### 2.4 Rio Protocol (Wayland Compositor)
+### 2.3 Dedicated Data Plane Protocols
 
-Rio implements a **Wayland-compatible** compositor. It uses Glenda IPC as the transport layer for the Wayland wire protocol, replacing Unix domain sockets.
+Data intensive services (Gopher, Fossil) use dedicated protocols for performance.
 
-**Transport Mechanism:**
-*   **Wire Protocol**: Standard Wayland object-oriented protocol.
-*   **Shared Memory**: Used for command buffers (high throughput) and pixel buffers (`wl_shm`).
-*   **Capabilities**: Used to pass shared memory handles (replacing file descriptors).
+#### Fossil Block Protocol (0x0600)
+Used for block-level access or bulk file I/O.
+*   `READ_BLOCKS`, `WRITE_BLOCKS` using Shared Memory Descriptors.
 
-**Base Protocol ID**: `0x0400`
+#### Gopher Net Protocol (0x0700)
+Used for packet I/O.
+*   `TX_PACKET`, `RX_POLL` using Ring Buffers.
 
-| ID | Method | Arguments | Return Values | Description |
-| :--- | :--- | :--- | :--- | :--- |
-| `0x0401` | `CONNECT` | `[]` | `[conn_id]` | Establishes a new Wayland client connection. |
-| `0x0402` | `DISPATCH` | `[conn_id]` | `[]` | Notifies Rio to process messages in the shared command buffer. |
-| `0x0403` | `GET_EVENT` | `[conn_id]` | `[has_event]` | Checks/Waits for events from the compositor. |
-| `0x0404` | `PASS_CAP` | `[conn_id, obj_id]` | `[]` | Transfers a Capability (e.g., Frame) associated with a protocol object. |
+#### Chimera VM Protocol (0x0900)
+Used for controlling VMs.
+*   `VM_ENTER`, `VM_EXIT`, `INJECT_IRQ`.
 
-**Key Wayland Globals Supported:**
-*   `wl_compositor`: Surface creation.
-*   `wl_shm`: Shared memory buffers.
-*   `wl_seat`: Input devices (pointer, keyboard).
-*   `xdg_wm_base`: Desktop window management.
-
-### 2.5 Fault Handler Protocol
+### 2.4 Fault Handler Protocol
 
 Messages sent by the kernel to the registered Fault Handler (usually Warren) when a thread exception occurs.
 
