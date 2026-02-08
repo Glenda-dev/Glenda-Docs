@@ -18,7 +18,7 @@ pub trait ProcessService {
     fn exit(&mut self, pid: Badge, code: usize) -> Result<(), Error>;
     
     /// 将 ELF 二进制镜像加载到目标进程的地址空间。
-    fn load_image(&mut self, pid: Badge, elf_data: &[u8]) -> Result<(usize, usize), Error>;
+    fn exec(&mut self, pid: Badge, elf_data: &[u8]) -> Result<(usize, usize), Error>;
 }
 ```
 

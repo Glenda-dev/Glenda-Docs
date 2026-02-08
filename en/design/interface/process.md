@@ -18,7 +18,7 @@ pub trait ProcessService {
     fn exit(&mut self, pid: Badge, code: usize) -> Result<(), Error>;
     
     /// Load an ELF binary image into a target process's address space.
-    fn load_image(&mut self, pid: Badge, elf_data: &[u8]) -> Result<(usize, usize), Error>;
+    fn exec(&mut self, pid: Badge, elf_data: &[u8]) -> Result<(usize, usize), Error>;
 }
 ```
 
