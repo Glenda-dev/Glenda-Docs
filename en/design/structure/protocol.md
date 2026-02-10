@@ -146,7 +146,7 @@ pub trait ProcessManager {
     fn get_pid(&self) -> Pid;
 }
 
-/// Fossil Client Interface (9P2000 Abstraction)
+/// Fossil Client Interface (File System Abstraction)
 pub trait FileSystem {
     fn attach(&self, uname: &str, aname: &str) -> Result<Fid, Error>;
     fn walk(&self, fid: Fid, new_fid: Fid, names: &[&str]) -> Result<(), Error>;

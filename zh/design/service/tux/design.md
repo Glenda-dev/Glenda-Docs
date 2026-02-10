@@ -46,7 +46,7 @@ Tux 使用半虚拟化驱动程序 (`virtio-glenda`) 与 I/O 服务通信。
 
 Tux 提供了丰富的接口以便与 Glenda 原生环境交互：
 
-*   **控制平面 (9P)**: Tux 导出一个 9P 文件系统，暴露 Linux 内部状态（如 `/proc`, `/sys` 的对应物），允许 Glenda 工具 (`rc`, `ls`) 查看 Linux 进程。
+*   **控制平面**: Tux 导出一个文件系统接口，暴露 Linux 内部状态（如 `/proc`, `/sys` 的对应物），允许 Glenda 工具 (`rc`, `ls`) 查看 Linux 进程。
 *   **数据平面 (共享内存)**: 通过高效的共享内存机制与 **Fossil** (FS) 和 **Gopher** (Net) 交换大数据块。
 *   **信号与事件**: 定义了一套机制，使得 Glenda 任务可以向 Linux 进程发送信号，反之亦然。
 

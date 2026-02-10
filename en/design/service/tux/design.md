@@ -46,7 +46,7 @@ Tux uses paravirtualized drivers (`virtio-glenda`) to talk to I/O services.
 
 Tux provides rich interfaces for interaction with the Glenda native environment:
 
-*   **Control Plane (9P)**: Tux exports a 9P filesystem exposing internal Linux state (counterparts to `/proc`, `/sys`), allowing Glenda tools (`rc`, `ls`) to inspect Linux processes.
+*   **Control Plane**: Tux exports a filesystem interface exposing internal Linux state (counterparts to `/proc`, `/sys`), allowing Glenda tools (`rc`, `ls`) to inspect Linux processes.
 *   **Data Plane (Shared Memory)**: Efficient exchange of large data blocks with **Fossil** (FS) and **Gopher** (Net) via shared memory.
 *   **Signals & Events**: A mechanism is defined allowing Glenda tasks to send signals to Linux processes and vice versa.
 

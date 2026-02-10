@@ -17,7 +17,7 @@ APE maintains a routing table in the process's user-space memory, mapping file d
 | FD Range | Type | Backend Service | Protocol |
 | :--- | :--- | :--- | :--- |
 | `0, 1, 2` | Stdio | **Warren** / **Rio** | Ring Buffer / serialized IO |
-| `3...N` | Files | **Fossil** | 9P2000 + SHM |
+| `3...N` | Files | **Fossil** | FS Protocol + SHM |
 | `M...P` | Sockets | **Gopher** | Dedicated Socket IPC |
 | `X...Y` | Devices | **Unicorn** | Device Specific IPC |
 
@@ -26,7 +26,7 @@ APE maintains a routing table in the process's user-space memory, mapping file d
 ### 3.1 VFS Shim (Virtual File System)
 Glenda apps don't speak to a central VFS kernel object. APE maintains a lightweight VFS state in userspace.
 *   **CWD**: Current Working Directory tracking.
-*   **Mount Table**: Per-process mount points (if not using the 9P Namespace Server entirely).
+*   **Mount Table**: Per-process mount points.
 *   **FD Table**: `Vec<FileEntry>` mapping `int fd` to `{ Capability, Offset, Flags }`.
 
 ### 3.2 Signal Emulation

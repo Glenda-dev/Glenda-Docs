@@ -18,7 +18,7 @@ In `musl-glenda`, the `__syscall` function is overridden to perform a **Glenda I
 *   **Mechanism**:
     1.  Determine the target service based on the syscall number (e.g., `open` -> Fossil, `fork` -> Warren).
     2.  Retrieve the **Service Endpoint Capability**.
-    3.  Marshal the syscall number and arguments into the IPC message registers (using 9P or dedicated protocols).
+    3.  Marshal the syscall number and arguments into the IPC message registers (using service specific protocols).
     4.  Invoke `seL4_Call` (or the Glenda equivalent `glenda_call`) to send the message.
     5.  Unpack the return value from the IPC response.
 

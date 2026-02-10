@@ -13,7 +13,6 @@ graph TD
     subgraph User Space
         9Ball[9Ball (Root Task)]
         Warren[Warren (进程/异常管理)]
-        9P[9P (命名空间服务器)]
         Gopher[Gopher (网络栈)]
         Fossil[Fossil (文件系统)]
         Unicorn[Unicorn (驱动管理)]
@@ -27,14 +26,12 @@ graph TD
 
     9Ball --> Kernel
     Warren --> Kernel
-    9P --> Kernel
     Gopher --> Kernel
     Fossil --> Kernel
     Unicorn --> Kernel
     Chimera --> Kernel
     Tux --> Kernel
     App --> Warren
-    App --> 9P
     App --> Gopher
     App --> Fossil
     App --> Chimera

@@ -5,7 +5,7 @@
 2. **libc** 通过 IPC 向 Tux 发送 `PosixRequest`。
 3. **Tux** 收到请求并通过其 **Badge** 识别调用者。
 4. **Tux** 检查其内部 VFS。如果文件位于原生 Glenda 挂载点上：
-5. **Tux** 通过 9P/IPC 将路径查找转发给 **Fossil** (文件服务器)。
+5. **Tux** 通过 IPC 将路径查找转发给 **Fossil** (文件服务器)。
 6. **Fossil** 返回文件会话的新的 `Endpoint Capability` 或句柄。
 7. **Tux** 分配一个新的 FD（例如 `3`），将 Capability 存储在进程的 `fd_table` 中，并将 `3` 返回给 App。
 

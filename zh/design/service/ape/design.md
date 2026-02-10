@@ -17,7 +17,7 @@ APE 在进程的用户空间内存中维护一个路由表，将文件描述符 
 | FD 范围 | 类型 | 后端服务 | 协议 |
 | :--- | :--- | :--- | :--- |
 | `0, 1, 2` | 标准IO | **Warren** / **Rio** | Ring Buffer / 序列化 IO |
-| `3...N` | 文件 | **Fossil** | 9P2000 + SHM |
+| `3...N` | 文件 | **Fossil** | FS 协议 + SHM |
 | `M...P` | 套接字 | **Gopher** | APE 专用 Socket IPC |
 | `X...Y` | 设备 | **Unicorn** | 设备特定 IPC |
 
@@ -26,7 +26,7 @@ APE 在进程的用户空间内存中维护一个路由表，将文件描述符 
 ### 3.1 VFS 垫片 (Virtual File System)
 Glenda 应用程序不与中央 VFS 内核对象对话。APE 在用户空间维护轻量级的 VFS 状态。
 *   **CWD**: 当前工作目录跟踪。
-*   **挂载表**:每进程挂载点（如果不完全使用 9P 命名空间服务器）。
+*   **挂载表**: 每进程挂载点。
 *   **FD 表**: 映射 `int fd` 到 `{ Capability, Offset, Flags }` 的 `Vec<FileEntry>`。
 
 ### 3.2 信号模拟 (Signal Emulation)

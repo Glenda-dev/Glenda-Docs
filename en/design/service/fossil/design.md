@@ -1,7 +1,7 @@
 # Fossil Design Document
 
 ## 1. Introduction
-Fossil is the main **File System Server** for Glenda. It manages persistent storage on block devices and exposes a hierarchical file structure via the **9P2000** protocol.
+Fossil is the main **File System Server** for Glenda. It manages persistent storage on block devices and exposes a hierarchical file structure.
 
 ## 2. Architecture
 
@@ -14,7 +14,7 @@ Fossil supports multiple filesystem implementations via a modular backend trait.
     *   **GlendaFS** (Planned): A log-structured filesystem optimized for capability store.
 
 ### 2.2 Metadata vs Data
-*   **Control Plane (9P)**: Directory traversal (`walk`), file creation (`create`), and status checks (`stat`) are handled via standard 9P messages.
+*   **Control Plane (FS Protocol)**: Directory traversal (`walk`), file creation (`create`), and status checks (`stat`) are handled via standard FS protocol messages.
 *   **Data Plane (Shared Memory)**:
     *   Large reads/writes utilize a **DMA-like shared memory mechanism**.
     *   Fossil exposes a "Dataport" capability upon file open.
@@ -26,9 +26,8 @@ Fossil integrates with **Warren**'s memory manager.
 
 ## 3. Interfaces
 
-### 3.1 9P Export
+### 3.1 File Interface
 Fossil typically serves the root `/` or mount points like `/mnt/disk`.
-*   Standard 9P2000.L support.
 
 ### 3.2 Block Interface (Client of Unicorn)
 Fossil consumes block devices provided by Unicorn.
@@ -38,4 +37,3 @@ Fossil consumes block devices provided by Unicorn.
 Previously, Gopher handled VFS duties. Now:
 *   **Fossil**: Handles *Disk* filesystems.
 *   **Gopher**: Handles *Network* stacks (`/net`).
-*   **9P Server**: Aggregates them into a single tree.

@@ -146,7 +146,7 @@ pub trait ProcessManager {
     fn get_pid(&self) -> Pid;
 }
 
-/// Fossil 客户端接口 (9P2000 抽象)
+/// Fossil 客户端接口 (文件系统抽象)
 pub trait FileSystem {
     fn attach(&self, uname: &str, aname: &str) -> Result<Fid, Error>;
     fn walk(&self, fid: Fid, new_fid: Fid, names: &[&str]) -> Result<(), Error>;

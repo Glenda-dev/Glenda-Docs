@@ -76,7 +76,7 @@ Used by driver processes to access hardware resources. When Unicorn spawns a dri
 
 ## 6. Driver Development Guide
 
-To write a driver for a specific device in Glenda, the driver must implement the logic to interact with the hardware using the resources provided by Unicorn, and expose a service interface (usually via 9P or a specific IPC protocol) to the rest of the system.
+To write a driver for a specific device in Glenda, the driver must implement the logic to interact with the hardware using the resources provided by Unicorn, and expose a service interface (via a specific IPC protocol) to the rest of the system.
 
 ### 6.1 Driver Lifecycle
 1.  **Entry**: The driver starts as a normal process.

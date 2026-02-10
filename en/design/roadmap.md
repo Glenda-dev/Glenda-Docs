@@ -20,9 +20,6 @@
   * [ ] Fossil File System Server
     * [ ] Disk I/O
     * [ ] Unix-like FS
-  * [ ] 9P Namespace Server
-    * [ ] Namespace Management
-    * [ ] Mount/Bind Support
   * [ ] Unicorn Device Driver Manager
     * [ ] UART
     * [ ] VirtIO

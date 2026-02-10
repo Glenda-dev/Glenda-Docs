@@ -6,7 +6,7 @@
 2. **libc** sends a `PosixRequest` to Tux via IPC.
 3. **Tux** receives the request and identifies the caller via its **Badge**.
 4. **Tux** checks its internal VFS. If the file is on a native Glenda mountpoint:
-5. **Tux** forwards the path lookup to **Fossil** (File Server) via 9P/IPC.
+5. **Tux** forwards the path lookup to **Fossil** (File Server) via IPC.
 6. **Fossil** returns a new `Endpoint Capability` or Handle for the file session.
 7. **Tux** allocates a new FD (e.g., `3`), stores the capability in the process's `fd_table`, and returns `3` to the App.
 

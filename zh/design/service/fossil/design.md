@@ -1,7 +1,7 @@
 # Fossil 设计文档
 
 ## 1. 简介
-Fossil 是 Glenda 的主 **文件系统服务器 (File System Server)**。它管理块设备上的持久存储，并通过 **9P2000** 协议暴露层次化的文件结构。
+Fossil 是 Glenda 的主 **文件系统服务器 (File System Server)**。它管理块设备上的持久存储，并提供层次化的文件结构。
 
 ## 2. 架构
 
@@ -14,7 +14,7 @@ Fossil 通过模块化的后端 Trait 支持多种文件系统实现。
     *   **GlendaFS** (计划中): 针对 Capability 存储优化的日志结构文件系统。
 
 ### 2.2 元数据与数据
-*   **控制平面 (9P)**: 目录遍历 (`walk`)、文件创建 (`create`) 和状态检查 (`stat`) 通过标准 9P 消息处理。
+*   **控制平面 (FS 协议)**: 目录遍历 (`walk`)、文件创建 (`create`) 和状态检查 (`stat`) 通过标准 FS 协议消息处理。
 *   **数据平面 (共享内存)**:
     *   大块读/写使用 **类 DMA 的共享内存机制**。
     *   Fossil 在文件打开时暴露一个 "Dataport" Capability。
@@ -26,9 +26,8 @@ Fossil 与 **Warren** 的内存管理器集成。
 
 ## 3. 接口
 
-### 3.1 9P 导出
+### 3.1 文件接口
 Fossil 通常服务于根 `/` 或挂载点如 `/mnt/disk`。
-*   支持标准 9P2000.L。
 
 ### 3.2 块接口 (Unicorn 客户端)
 Fossil 消费由 Unicorn 提供的块设备。
@@ -38,4 +37,3 @@ Fossil 消费由 Unicorn 提供的块设备。
 此前，Gopher 负责 VFS 职责。现在：
 *   **Fossil**: 处理 **磁盘** 文件系统。
 *   **Gopher**: 处理 **网络** 栈 (`/net`)。
-*   **9P Server**: 将它们聚合为单个树。
