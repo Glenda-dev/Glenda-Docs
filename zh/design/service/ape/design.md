@@ -1,48 +1,65 @@
 # APE (ANSI/POSIX Environment) 设计文档
 
 ## 1. 简介
-APE 是 Glenda 的 **POSIX 兼容垫片层 (Shim)**。与传统的单体 POSIX 服务器不同，APE 主要实现为 **客户端库**（属于 `libglenda` 或 `musl-glenda` 的一部分）。它拦截标准的 POSIX 系统调用，并将其指向相应的 Glenda 原生服务。
+APE 是 Glenda 的 **Linux 二进制兼容性 (Linux ABI Emulator)** 与 **POSIX 兼容垫片层 (Shim)**。其核心目标是实现在 Glenda 微内核上直接运行未经修改的 Linux 二进制程序。
 
-## 2. 架构
+APE 采用多层拦截架构，结合了 **vDSO (极速路径)**、**动态库拦截 (快速路径)** 以及 **内核 Fault Handler (保底路径)**。
 
-APE 作为运行在应用程序进程空间内的“智能代理”发挥作用。
+## 2. 总体架构设计
 
-### 2.1 库层 (Library Layer)
-*   **位置**: `lib/libglenda-rs/src/ape/` 或集成在 `musl-glenda` 的系统调用后端中。
-*   **功能**: 将 C-ABI 系统调用/libc 函数转换为 Glenda IPC 消息。
+### 2.1 三层系统调用拦截机制 (Three-Tier Interception)
 
-### 2.2 服务路由
-APE 在进程的用户空间内存中维护一个路由表，将文件描述符 (FD) 映射到 Glenda Capabilities (Endpoints)。
+为了兼顾兼容性与性能，APE 提供三种不同层级的系统调用转换路径：
 
-| FD 范围 | 类型 | 后端服务 | 协议 |
+- **极速路径 (vDSO)**：
+  - **机制**：在进程地址空间映射一个兼容 Linux vDSO ABI 的动态库。
+  - **实现**：无需陷入内核，直接在用户态读取与系统服务（如 March 时间服务）共享的**只读内存页**。适用于 `gettimeofday`, `clock_gettime` 等高频只读调用。
+  - **优势**：零上下文切换开销。
+
+- **快速路径 (动态库拦截)**：
+  - **机制**：对于动态链接的 Linux 程序，通过注入 `libape.so` 拦截 `glibc` 或 `musl` 封装的系统调用函数。
+  - **实现**：`libape` 直接将 POSIX 请求转换为 Glenda 原生的 IPC 请求，发送至 APE 服务或目标功能服务（如 Fossil）。
+  - **优势**：高性能，避免了触发硬件 Syscall 异常。
+
+- **慢速/保底路径 (Fault Handler)**：
+  - **机制**：针对静态编译或使用内联汇编触发真实 `syscall/ecall` 指令的行为。
+  - **实现**：内核捕获硬件异常后，通过 **Fault Handler** 机制将执行流委托给 APE 服务。APE 服务解析寄存器状态，模拟执行该系统调用，并修改被捕获线程的上下文（PC+4, 返回值寄存器）后恢复执行。
+  - **优势**：最大化兼容性。
+
+### 2.2 核心组件
+
+- **APE Service (独立服务端)**：
+  - 作为一个独立的 Glenda 系统服务运行（`service/ape/`）。
+  - **状态维护**：维护 Linux 进程树、PID 映射、全局 POSIX 信号挂起队列。
+  - **资源映射**：管理 Linux `int fd` 到 Glenda `CapPtr` 的转换。
+
+- **libape (用户态库)**：
+  - 集成在进程空间内，负责 IPC 通信的封装。
+  - **VFS 垫片**：在用户空间维护轻量级状态（CWD、每进程挂载点）。
+
+## 3. 服务路由映射
+
+APE 将 Linux 的资源请求路由到相应的 Glenda 原生服务：
+
+| Linux 资源 | 后端服务 | 协议 | 实现方式 |
 | :--- | :--- | :--- | :--- |
-| `0, 1, 2` | 标准IO | **Warren** / **Rio** | Ring Buffer / 序列化 IO |
-| `3...N` | 文件 | **Fossil** | FS 协议 + SHM |
-| `M...P` | 套接字 | **Gopher** | APE 专用 Socket IPC |
-| `X...Y` | 设备 | **Unicorn** | 设备特定 IPC |
+| **文件系统 (FS)** | **Fossil** | FS 协议 + SHM | FD 映射到文件 Capability |
+| **网络 (Network)** | **Gopher** | Socket IPC | APE 代理 Socket 状态 |
+| **硬件/设备** | **Unicorn** | 设备特定 IPC | 映射为后端 Virtio 设备 |
+| **进程/内存**| **Warren** | Process/Mem | 封装 `fork`, `exec`, `sbrk` |
+| **时间/定时器**| **March** | vDSO / Timer | 共享内存 / 信号通知 |
 
-## 3. 关键组件
+## 4. 关键原语实现
 
-### 3.1 VFS 垫片 (Virtual File System)
-Glenda 应用程序不与中央 VFS 内核对象对话。APE 在用户空间维护轻量级的 VFS 状态。
-*   **CWD**: 当前工作目录跟踪。
-*   **挂载表**: 每进程挂载点。
-*   **FD 表**: 映射 `int fd` 到 `{ Capability, Offset, Flags }` 的 `Vec<FileEntry>`。
+### 4.1 信号模拟 (Signal Emulation)
+- **注册**：程序通过 APE 向 Warren 注册一个专用的回复端点（Reply Endpoint）。
+- **投递**：当 APE 服务确定需要投递信号时，通过该端点发送 IPC，APE 库在用户态接管执行流，模拟执行 POSIX 信号处理函数。
 
-### 3.2 信号模拟 (Signal Emulation)
-*   **接收器**: 在 **Warren** 注册一个 IPC 端点以接收“软件中断”。
-*   **分发器**: 当信号 IPC 到达时，APE 中断主线程（或使用辅助线程）以执行注册的 POSIX 信号处理程序。
+### 4.2 进程克隆 (Fork/Exec)
+- `fork()`: 调用 Warren 创建新进程，利用内核的地址空间克隆及 Capability 复制。
+- `exec()`: 由 APE 请求 Warren 重新解析 ELF 头部。如果是 Linux ELF，Warren 会自动将 APE 服务关联为该进程的异常处理程序。
 
-### 3.3 进程原语
-*   `fork()`: 通过 **Warren** 实现（创建新任务，COW 内存）。
-*   `exec()`: 通过 **Warren** 加载新的 ELF。
+## 5. 性能优化
+*   **零拷贝 I/O**: 对于大块数据传输，APE 自动在进程空间与服务间建立共享内存映射。
+*   **vDSO 共享**: 全系统共享同一个只读时间/状态页，减少内核内存占用。
 
-## 4. 使用模式
-
-1.  **原生链接**: Glenda 感知的 Rust 应用直接使用 `libglenda`（绕过部分 APE，使用原生 Trait）。
-2.  **遗留链接**: C/C++ 应用链接到 `musl-glenda` (APE 后端)。
-3.  **二进制翻译**: 纯 Linux 二进制文件在 **Tux** 下运行，Tux 充当“服务端 APE”。
-
-## 5. 性能
-*   **零拷贝 I/O**: APE 对大于 512 字节的 `read/write` 负载使用共享内存，以避免 IPC 拷贝开销。
-*   **批处理系统调用**: (计划中) 聚合多个小型元数据操作。

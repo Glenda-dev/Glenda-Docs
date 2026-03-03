@@ -6,7 +6,7 @@ Warren 是 Glenda 微内核系统的中央资源和任务管理器。虽然内�
 ## 2. 职责
 
 *   **内存管理**:
-    *   从 9Ball 接收大部分系统内存 (Untyped)。
+    *   从 Warren / Nineball 接收大部分系统内存 (Untyped)。
     *   管理全局帧分配器。
     *   处理用户进程的缺页异常（延迟分配，COW）。
 *   **进程与线程管理**:
@@ -19,7 +19,7 @@ Warren 是 Glenda 微内核系统的中央资源和任务管理器。虽然内�
         *   处理线程同步原语（类 futex 机制）。
 *   **异常处理**:
     *   注册为其生成的所有进程的异常处理程序。
-    *   处理段错误或非法指令等故障，可能将其转换为信号（对于 Tux）或错误报告。
+    *   处理段错误或非法指令等故障，可能将其转换为错误报告。
 *   **Capability 管理**:
     *   充当 capability 代理，铸造 capabilities 并将其分发给新进程。
 
@@ -27,11 +27,11 @@ Warren 是 Glenda 微内核系统的中央资源和任务管理器。虽然内�
 
 Warren 作为高优先级服务运行。它在自己的地址空间中维护所有运行进程的表（进程控制块 - PCB）。
 
-### 与 9Ball 的交互
-9Ball 引导 Warren。一旦运行，Warren 接管创建 9Ball 或其他服务请求的未来进程的责任。
+### 与 Warren / Nineball 的交互
+Warren / Nineball 引导 Warren。一旦运行，Warren 接管创建 Warren / Nineball 或其他服务请求的未来进程的责任。
 
 ### 与客户端的交互
-客户端（如 Tux 或 Gopher）请求 Warren：
+客户端（如 APE 或 Gopher）请求 Warren：
 *   `yield`: 放弃 CPU。
 *   `map_memory`: 请求共享内存。
 *   `spawn_thread`: 在现有 PD 中创建新线程。
@@ -91,5 +91,5 @@ Warren 通过 **Warren 协议** (ID `0x0100`) 暴露其功能。
 
 ### 4.5 Capability 代理
 *   `REQUEST_CAP(service_id) -> []` (通过 IPC 传输 Cap)
-    *   请求系统服务的句柄（例如 Gopher, Rio）。
+    *   请求系统服务的句柄（例如 Gopher, Prism）。
     *   Warren 在授予之前验证权限。

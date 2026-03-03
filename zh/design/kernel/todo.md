@@ -6,11 +6,11 @@
 - [x] **模块化重构**:
     - [x] 将 `xtask` 拆分为模块: `config`, `build`, `pack`, `qemu`, `fs`。
     - [x] 实现 `config.rs` 以解析 `config.toml`。
-    - [x] 实现 `pack.rs` 以生成 `target/bootfs/payload.bin` (Header + Modules)。
+    - [x] 实现 `pack.rs` 以生成 `target/bootfs/initrd` (Header + Modules)。
     - [x] 实现 `build.rs` 以确保 `pack` 在内核构建之前运行。
 - [x] **内核集成 (Incbin 策略)**:
-    - [x] 使用 `.incbin` 创建 `kernel/src/asm/payload.S` 以包含 `payload.bin`。
-    - [x] 更新 `kernel/build.rs` 以监视 `payload.bin` 的更改。
+    - [x] 使用 `.incbin` 创建 `kernel/src/asm/payload.S` 以包含 `initrd`。
+    - [x] 更新 `kernel/build.rs` 以监视 `initrd` 的更改。
 - [ ] **GRUB / Multiboot 支持**:
     - [ ] 添加 `multiboot2` 头到内核汇编入口。
     - [ ] 在 Rust 中实现 Multiboot2 标签解析器。
@@ -94,9 +94,9 @@
     - [ ] 用于帧缓冲区访问的用户空间驱动程序。
 
 ## 阶段 8: POSIX & Shell
-- [ ] **Tux Server**:
-    - [ ] 基本 POSIX 信号处理。
-    - [ ] 通过 TCB 操作模拟 `fork`/`exec`。
+- [ ] **APE POSIX 层**:
+    - [ ] 基于 vDSO 的系统调用拦截。
+    - [ ] 兼容 Linux 的用户空间信号处理实现。
 - [ ] **Shell**:
     - [ ] 基本命令行界面。
 

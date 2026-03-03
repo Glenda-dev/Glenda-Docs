@@ -72,22 +72,16 @@ IPC 是线程交互的唯一方式。
 ## 4. 启动过程
 
 1.  **Bootloader**:
-    *   **OpenSBI (RISC-V)**: 直接跳转到内核。内核使用嵌入式 payload。
-    *   **GRUB (x86/UEFI)**: 加载内核和 `payload.bin`。传递 Multiboot 信息。
+    *   基于 **OpenSBI (RISC-V)** 环境，Bootloader 将控制权移交给内核。
 2.  **内核初始化**:
     *   初始化 CPU, Trap Vector, 内存分配器。
-    *   **Payload 发现**:
-        *   检查 Multiboot 信息中的模块。
-        *   回退到嵌入式 `_payload_start`。
-    *   创建 Root Task。
-    *   用所有资源填充 Root Task 的 CSpace。
-3.  **切换到用户模式**: 内核跳转到 Root Task 入口点。
-4.  **用户空间初始化**:
-    *   Root Task 初始化其分配器。
-    *   Root Task 启动驱动程序进程 (UART, Timer)。
-    *   Root Task 启动文件系统服务器。
-    *   Root Task 启动 Shell/Init 进程。
-
-## 5. 系统调用接口
-
+    *   准备 User Thread Control Block (UTCB) 的共享内存布局。
+    *   创建 Root Task (`warren`) 并在固定地址加载。
+    *   构建 `BootInfo` (位于 `BOOTINFO_VA`) 供 `warren` 解析以发现 `initrd` 位置及可用内存区域。
+    *   将所有初始物理资源以 Capabilities 形式填充至 Root Task 的 CSpace。
+3.  **切换到用户模式**: 内核跳转到 Root Task (`warren`) 入口点。
+4.  **用户空间初始化 (Root Task: warren)**:
+    *   `warren` 作为 Init 进程也是 "Monitor"，负责接管整个系统的全局资源。
+    *   解析 `BootInfo`，通过内部管理服务挂载 `initrd`。
+    *   `warren` 按需启动各个服务 (如系统驱动、文件系统及功能服务如 `nineball`, `unicorn` 等)。
 *   **`sys_invoke(cptr, ...)`**: 在内核对象（TCB, PageTable 等）上调用方法。

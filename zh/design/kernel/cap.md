@@ -10,8 +10,8 @@ Glenda 使用基于 Capability 的访问控制模型。
 ## 2. CSpace (Capability 空间)
 
 每个进程（或保护域）都有一个 **CSpace**。
-*   CSpace 是一个（概念上的）表，将整数索引映射到内核 Capabilities。
-*   **CPTR (Capability 指针)**：用户空间代码用于引用 capability 的整数索引（类似于文件描述符 `fd`）。
+*   CSpace 是一棵树，将树上的节点映射到内核 Capabilities。
+*   **CPTR (Capability 指针)**：用户空间代码用于引用 capability 的层级索引。
 *   内核管理 CSpace；用户空间无法伪造 capabilities。
 
 ## 3. 内核对象
@@ -22,19 +22,29 @@ Capabilities 指向特定的内核对象：
 | :--- | :--- |
 | **Untyped** | 所有物理内存的根。表示一块连续的空闲内存。可以“重类型化”为特定的内核对象。 |
 | **TCB** | 线程控制块。表示一个线程。调用它允许挂起/恢复/配置线程。 |
-| **Endpoint** | IPC 端口。用于消息传递。 |
-| **Frame** | 一个物理内存页（例如 4KB）。可以映射到 VSpace 中。 |
-| **PageTable** | 硬件页表结构的一个级别。 |
-| **IrqHandler** | 管理特定硬件中断的权限。 |
-| **CNode** | CSpace 结构中的一个节点（用于存储 caps）。 |
-| **Reply** | 一个特殊的、一次性的 capability，用于回复 `Call` 调用。 |
+| **Endpoint** | IPC 端口。用于消息传递与同步。 |
+| **Frame** | 一个物理内存页（例如 4KB）。可以映射到 VSpace 中，支持引用计数管理。 |
+| **PageTable** | 硬件页表结构的一个级别（RISC-V Sv39/Sv48）。 |
+| **IrqHandler** | 管理特定硬件中断的权限，关联中断号与 Badge。 |
+| **CNode** | CSpace 结构中的一个节点，存储 Capability 槽位，支持 Mint/Copy/Move/Revoke。 |
+| **Reply** | 一个特殊的、一次性的 capability，由内核在 `Call` 调用时自动生成，用于安全回复。 |
+| **Kernel** | 内核特权操作接口，管理系统时钟、获取中断/MMIO能力、系统 Shell 等。 |
+| **VSpace** | 应用程序虚拟地址空间管理器，关联顶级页表。 |
+| **Console** | 访问内核串行控制台的特权能力。 |
 
 ## 4. Capability 操作
 
 ### 4.1 调用 (Invocation)
 Cap 的主要用途是通过 `sys_invoke` 进行 **调用**。
-*   可用的具体方法取决于对象类型。
-*   有关每种对象类型的方法的完整列表，请参阅 [系统调用接口](syscall.md)。
+*   **分发逻辑**：内核在 `kernel/src/trap/syscall.rs` 中接收 `sys_invoke(cptr, method, ...)`。
+*   **方法查找**：通过 `kernel/src/cap/invoke/` 下的模块（如 `tcb.rs`, `vspace.rs`）分发到具体实现。
+*   **常用方法 ID (Method IDs)**：
+    *   `Untyped`: `RETYPE(1)`, `GET_INFO(3)`
+    *   `TCB`: `CONFIGURE(1)`, `SET_PRIORITY(2)`, `RESUME(9)`, `SUSPEND(10)`
+    *   `CNode`: `MINT(1)`, `COPY(2)`, `DELETE(3)`, `REVOKE(4)`, `RECYCLE(7)`
+    *   `VSpace`: `MAP(1)`, `UNMAP(2)`, `MAP_TABLE(3)`, `SETUP(5)`
+    *   `IPC`: `SEND(1)`, `RECV(2)`, `CALL(3)`, `NOTIFY(4)`, `PROXY(5)`
+    *   `IRQ`: `SET_NOTIFICATION(1)`, `ACK(3)`
 
 ### 4.2 重类型化 (对象创建)
 **Retype** 操作是创建新内核对象的唯一机制。它将 `Untyped` 内存区域的一部分转换为一个或多个特定的内核对象。
@@ -74,13 +84,15 @@ Glenda 通过结合 **引用计数** 和 **Capability 派生树 (CDT)** 来确�
     *   **Capability 所有权**: 在 Rust 内核中，`Capability` 结构实现了 `Clone` 和 `Drop`。
     *   **增加**: 克隆 `Capability`（通过 `Clone` 或传递给 `insert` 等方法时）会增加底层对象的引用计数。
     *   **减少**: Drop `Capability`（通过 `Drop` 或覆盖 CNode 槽时）会减少计数。
-    *   **销毁**: 当计数达到零时，对象被销毁。如果对象是从 `Untyped` 内存创建的，则该内存逻辑上返回给父 `Untyped` 区域或标记为空闲以供将来重类型化。
+    *   **销毁**: 当计数达到零时，对象被销毁。
 *   **Capability 派生树 (CDT)**: CDT 跟踪 capabilities 之间的“父子”关系。
     *   当 `Untyped` 区域被重类型化时，生成的对象是该 `Untyped` capability 的子对象。
     *   当 capability 被 `Minted` 时，新 capability 是原始 capability 的子对象。
 *   **Revoke (撤销)**: `Revoke` 操作允许用户递归删除从目标 capability 派生的所有 capabilities。
     *   如果在 `Untyped` capability 上调用 `Revoke`，则从该内存创建的所有对象都将被销毁，并且内存被回收。
     *   这确保了资源提供者始终可以收回其委托给子进程的资源。
+*   **Recycle (回收)**：`Recycle` 操作允许用户直接将目标 capability 转换成 Untyped 用于再次分配，并返回物理地址与大小
+    *   如果 capability 不含有有效的内存空间，则 CSpace 对应槽位会被清空
 
 ## 5. Badges (徽章)
 
@@ -88,5 +100,5 @@ Glenda 通过结合 **引用计数** 和 **Capability 派生树 (CDT)** 来确�
 *   服务器持有 Endpoint 的“主”接收 Cap。
 *   服务器为每个客户端“Mint”一个带有唯一 **Badge**（整数标签）的发送 Cap。
 *   **不可变身份**: 一旦 capability 被标记，其徽章就无法修改。这确保了客户端无法通过重新标记其收到的 capability 来伪造其身份。
-*   **自动传递**: 当线程使用带徽章的 capability 发送消息时，内核会自动提取徽章并将其传递给接收者（通常通过指定的寄存器如 `t0`）。
+*   **自动传递**: 当线程使用带徽章的 capability 发送消息时，内核会自动提取徽章并将其传递给接收者，通过UTCB的Badge字段传递。
 *   **结果**: 服务器确切地知道哪个客户端发送了消息，而无需内核具有全局“客户端 ID”概念。徽章 *就是* 身份。

@@ -39,7 +39,7 @@ struct MsgTag {
 | `0x0100` - `0x01FF` | **Kernel** | 内核协议 |
 | `0x0200` - `0x03FF` | **Warren** | 进程与资源管理协议 |
 | `0x0400` - `0x04FF` | **Unicorn** | 设备协议 |
-| `0x0500` - `0x05FF` | **9Ball** | 初始化协议 |
+| `0x0500` - `0x05FF` | **Warren / Nineball** | 初始化协议 |
 | `0x0600` - `0x06FF` | **Fossil** | 文件系统协议 |
 | `0x0700` - `0x07FF` | **Gopher** | 网络协议 |
 | `0x0800` - `0x08FF` | **Factotum** | 认证协议 |
@@ -125,9 +125,9 @@ Unicorn 管理设备发现、中断路由和 DMA 内存分配。
 | `4` | `EP_FACTOTUM` | Endpoint | **到 Warren 的 IPC 通道** (进程管理) |
 | `5` | `EP_GOPHER` | Endpoint | **到 Gopher 的 IPC 通道** (网络栈) |
 | `6` | `EP_UNICORN` | Endpoint | 到 Unicorn 的 IPC 通道 (设备管理) |
-| `7` | `EP_RIO` | Endpoint | 到 Rio 的 IPC 通道 (GUI) |
+| `7` | `EP_PRISM` | Endpoint | 到 Prism 的 IPC 通道 (GUI支撑) |
 | `8` | `EP_FOSSIL` | Endpoint | **到 Fossil 的 IPC 通道** (文件系统) |
-| `9` | `EP_CHIMERA` | Endpoint | 到 Chimera 的 IPC 通道 (虚拟化) |
+| `9` | `EP_NEXUS` | Endpoint | 到 Nexus 的 IPC 通道 (资源聚合) |
 | `10` | `FD_STDIN` | Endpoint/File | 标准输入 |
 | `11` | `FD_STDOUT` | Endpoint/File | 标准输出 |
 | `12` | `FD_STDERR` | Endpoint/File | 标准错误 |
@@ -166,11 +166,10 @@ pub trait DeviceManager {
     fn dma_free(&self, paddr: PhysAddr) -> Result<(), Error>;
 }
 
-/// Rio 客户端接口 (Wayland 传输)
-pub trait WaylandTransport {
-    fn connect(&self) -> Result<WaylandConnection, Error>;
-    fn dispatch(&self, conn: &WaylandConnection) -> Result<(), Error>;
-    fn poll_events(&self, conn: &WaylandConnection) -> Option<Vec<u8>>;
-    fn send_capability(&self, conn: &WaylandConnection, object_id: u32, cap: CapPtr) -> Result<(), Error>;
+/// Prism 客户端接口 (图形加速与合成)
+pub trait GPUResourceAcquisition {
+    fn create_surface(&self, width: u32, height: u32) -> Result<CapPtr, Error>;
+    fn swap_buffers(&self, surface: CapPtr) -> Result<(), Error>;
+    fn poll_input(&self) -> Option<Vec<u8>>;
 }
 ```

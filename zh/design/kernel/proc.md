@@ -49,55 +49,35 @@ TCB 是仅限内核的结构。它包含管理执行所需的最小状态。
 
 ### 3.1 核心字段
 
-*   **Arch State**: 保存的 CPU 寄存器（PC, SP, 通用寄存器）。
-*   **Priority**: 调度优先级 (0-255)。
+*   **Arch State**: 保存的 CPU 寄存器（`pc`, `sp`, `a0`-`a7`, `s0`-`s11` 等）。在 `sys_invoke` 时保存。
+*   **Priority**: 调度优先级 (0-255)。支持优先级继承。
 *   **Time Slice**: 剩余时间片。
-*   **State**: 当前生命周期状态 (枚举)。
-*   **Intrusive Links**: `prev` 和 `next` 指针，用于将 TCB 链接到调度程序或 IPC 队列中，无需动态分配。
-*   **IPC State**:
-    *   `fault_handler`: 发送故障 IPC 的 Capability (Endpoint)。
-    *   `ipc_buffer`: IPC 缓冲区的虚拟地址（UTCB 的一部分）。
-    *   `send_queue_head/tail`: 等待发送到此线程的线程队列。
-*   **CSpace Root**: 线程 capability 空间根 `CNode` 的 Capability。
-*   **VSpace Root**: 线程地址空间根 `PageTable` 的 Capability。
-*   **UTCB Frame**: 用于 UTCB 的物理帧的 Capability。
-*   **UTCB Pointer**: 线程地址空间中用户线程控制块的虚拟地址。
-*   **Fault Handler**: 发送故障 IPC 的 Capability (Endpoint)。
+*   **Affinity**: 指定线程绑定的 CPU 核心 ID。
+*   **State**: 当前生命周期状态 (Ready, Running, Blocked 等)。
+*   **Intrusive Links**: 内部 `prev`/`next` 指针，实现零分配的任务队列。
+*   **IPC State**: 关联的 `ipc_partner` 和 `badge`。
 
 ### 3.2 用户线程控制块 (UTCB)
 
-UTCB 是内核和用户线程之间共享的一页内存。它被映射到用户的 VSpace 中。
+UTCB 在内核侧通过 `tcb.utcb_frame` 进行管理。
 
-*   **目的**:
-    *   **IPC 消息寄存器**: 存储超过 CPU 寄存器的 IPC 负载。
-    *   **TLS**: 线程本地存储指针。
-    *   **IPC 缓冲区**: 接收 capabilities 的目的地。
-*   **访问**:
-    *   **用户**: 读/写。
-    *   **内核**: 读/写（在 IPC 和线程设置期间）。
+*   **映射**：每个 TCB 都有一个 `utcb_pointer` (通常指向 `UTCB_VA`)。
+*   **上下文共享**：内核可以直接读写 UTCB 中的 `msg_tag` 和 `mrs_regs`。
 
-## 4. 生命周期操作
+## 4. 调度算法
 
-### 4.1 创建
+内核实现了一个 **多级反馈队列 (MLFQ)** 或简单的 **优先级轮转 (Priority Round Robin)** 调度器（在 `kernel/src/proc/scheduler.rs` 实现）：
 
-线程创建是用户空间的责任（通常由 root task 或进程管理器执行），涉及多个内核步骤：
+*   **Ready Queues**: 每个优先级对应一个链表。
+*   **抢占机制**：内核时钟中断周期性减少 `timeslice`。耗尽后任务移至队列末尾。
+*   **时间片捐赠**：在 `Call` IPC 时，发送者将剩余时间片“借给”接收者。
 
-1.  **分配**: 父线程调用 `Untyped` capability 将一部分内存 **Retype** 为新的 `TCB` 对象。
-2.  **地址空间设置**: 父线程为 TCB 分配 VSpace (PageTable cap)。
-3.  **Capability 空间设置**: 父线程为 TCB 分配 CSpace (CNode cap)。
-4.  **UTCB 设置**: 父线程分配一个帧作为 UTCB 并将其映射到新线程的 VSpace 中。
-5.  **配置**: 父线程调用 `TCB` capability 以绑定 CSpace, VSpace, UTCB 帧和 UTCB 虚拟地址。它还设置初始指令指针 (IP)、栈指针 (SP) 和优先级。
-6.  **激活**: 父线程调用 `TCB::Resume()`，将线程从 **Inactive** 转换为 **Ready**。
+## 5. 故障处理 (Fault Handling)
 
-### 4.2 执行与调度
-
-*   **算法**: 抢占式优先级轮转。
-*   **策略**:
-    *   始终运行最高优先级的 **Ready** 线程。
-    *   如果多个线程具有相同的最高优先级，则在它们之间轮转。
-*   **抢占**: 当更高优先级的线程变为 Ready（例如，通过中断或 IPC 解除阻塞）或当前线程的时间片耗尽时发生。
-
-### 4.3 故障处理
+当线程触发异常（缺页、非法指令、断点）时，内核会捕获并生成一条特殊的 IPC 消息发送到 TCB 配置的 `fault_handler`。
+*   **协议**：使用 `KERNEL_PROTO` (0x2)。
+*   **标签**：`PAGE_FAULT`, `ILLEGAL_INSTRUCTION` 等。
+*   **处理者**：通常是 `Warren` 或调试器。处理者可以修改 TCB 状态或通过 `Reply` 恢复执行。
 
 当线程导致故障（例如，缺页异常、非法指令、除以零）时：
 
