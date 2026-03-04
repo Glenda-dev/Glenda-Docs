@@ -13,7 +13,7 @@ Nineball 从 `initrd` 中读取 `init.json` 配置文件。
 
 ### 2.2 启动序列
 1.  **初始化**：Nineball 启动后，向 Warren 请求自己的 `ENDPOINT`。
-2.  **配置读取**：通过 `ResourceClient::get_config` 从 Warren 获取 `init.json`。
+2.  **配置读取**：通过 `ResourceClient::get_file` 从 Warren 获取 `init.json`。
 3.  **Bootstrap**：在 `bootstrap()` 循环中，检查已运行的服务及其依赖，逐步 `start_service`。
 4.  **服务探测**：Nineball 充当 `INIT_ENDPOINT` 的监听者，服务启动后通常会向 Nineball `REPORT` 其就绪状态。
 

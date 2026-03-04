@@ -17,7 +17,7 @@ Warren 是 Glenda 操作系统的 **根任务 (Root Task)**。它是内核启动
 
 3.  **系统调用模拟与权限代理**：
     *   监听 `MONITOR_CAP` 端点。
-    *   处理来自普通进程的 `sbrk`, `DMA_ALLOC`, `GET_CONFIG` 等请求。
+    *   处理来自普通进程的 `sbrk`, `DMA_ALLOC`, `GET_FILE` 等请求。
     *   作为内核异常（Fault）的处理者。
 
 4.  **服务发现与配置**：
@@ -28,7 +28,7 @@ Warren 是 Glenda 操作系统的 **根任务 (Root Task)**。它是内核启动
 
 Warren 实现了以下关键协议：
 *   **PROCESS_PROTO (0x1)**：包含 `SPAWN`, `EXIT`, `THREAD_CREATE`, `GET_CNODE` 等。
-*   **RESOURCE_PROTO (0x3)**：包含 `ALLOC` (分配能力), `DMA_ALLOC` (物理内存分配), `SBRK` (堆扩展), `GET_CONFIG` (从 initrd 获取文件) 等。
+*   **RESOURCE_PROTO (0x3)**：包含 `ALLOC` (分配能力), `DMA_ALLOC` (物理内存分配), `SBRK` (堆扩展), `GET_FILE` (从 initrd 获取文件) 等。
 *   **KERNEL_PROTO (0x2)**：用于处理内核转发的 `PAGE_FAULT`, `ILLEGAL_INSTRUCTION` 等异常。
 
 ## 故障处理流程
