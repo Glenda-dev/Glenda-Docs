@@ -1,65 +1,112 @@
 # APE (ANSI/POSIX Environment) 设计文档
 
 ## 1. 简介
-APE 是 Glenda 的 **Linux 二进制兼容性 (Linux ABI Emulator)** 与 **POSIX 兼容垫片层 (Shim)**。其核心目标是实现在 Glenda 微内核上直接运行未经修改的 Linux 二进制程序。
 
-APE 采用多层拦截架构，结合了 **vDSO (极速路径)**、**动态库拦截 (快速路径)** 以及 **内核 Fault Handler (保底路径)**。
+APE 是 Glenda 的 Linux ABI 兼容层，负责把 Linux 风格 syscall 语义转换为 Glenda 的 capability + IPC 语义。
 
-## 2. 总体架构设计
+在当前实现中，APE 以独立服务运行在 `service/ape/`，由内核故障转发（`KERNEL_PROTO/SYSCALL`）驱动 syscall 分发。
 
-### 2.1 三层系统调用拦截机制 (Three-Tier Interception)
+## 2. 当前实现（与代码一致）
 
-为了兼顾兼容性与性能，APE 提供三种不同层级的系统调用转换路径：
+### 2.1 Syscall 进入路径
 
-- **极速路径 (vDSO)**：
-  - **机制**：在进程地址空间映射一个兼容 Linux vDSO ABI 的动态库。
-  - **实现**：无需陷入内核，直接在用户态读取与系统服务（如 March 时间服务）共享的**只读内存页**。适用于 `gettimeofday`, `clock_gettime` 等高频只读调用。
-  - **优势**：零上下文切换开销。
+当前主路径为：
 
-- **快速路径 (动态库拦截)**：
-  - **机制**：对于动态链接的 Linux 程序，通过注入 `libape.so` 拦截 `glibc` 或 `musl` 封装的系统调用函数。
-  - **实现**：`libape` 直接将 POSIX 请求转换为 Glenda 原生的 IPC 请求，发送至 APE 服务或目标功能服务（如 Fossil）。
-  - **优势**：高性能，避免了触发硬件 Syscall 异常。
+1. 用户线程触发 Linux 风格 syscall；
+2. 内核将上下文封装为 `KERNEL_PROTO` 消息；
+3. APE 在 `handler.rs` 中按 syscall 号分发到 `syscall/{io,process,misc}.rs`；
+4. APE 调用后端服务（Warren / FS / Prism 等）并回填返回值。
 
-- **慢速/保底路径 (Fault Handler)**：
-  - **机制**：针对静态编译或使用内联汇编触发真实 `syscall/ecall` 指令的行为。
-  - **实现**：内核捕获硬件异常后，通过 **Fault Handler** 机制将执行流委托给 APE 服务。APE 服务解析寄存器状态，模拟执行该系统调用，并修改被捕获线程的上下文（PC+4, 返回值寄存器）后恢复执行。
-  - **优势**：最大化兼容性。
+> 代码锚点：`service/ape/src/ape/fault.rs`、`service/ape/src/ape/handler.rs`
 
-### 2.2 核心组件
+### 2.2 生命周期职责分层
 
-- **APE Service (独立服务端)**：
-  - 作为一个独立的 Glenda 系统服务运行（`service/ape/`）。
-  - **状态维护**：维护 Linux 进程树、PID 映射、全局 POSIX 信号挂起队列。
-  - **资源映射**：管理 Linux `int fd` 到 Glenda `CapPtr` 的转换。
+- **Warren（资源所有者）**
+  - 创建/销毁进程内核对象：`TCB/CNode/VSpace/UTCB/TrapFrame/KStack`；
+  - 维护全局进程表与资源回收（`create`, `exit_wrapper`）。
+- **APE（Linux 语义管理者）**
+  - 维护 Linux 侧 PID/FD/路径与内存映射元数据；
+  - 保存 `host_pid -> ape_pid` 映射；
+  - 在 `exit/fault` 时先清理 APE 本地引用，再调用 `proc_client.kill`。
 
-- **libape (用户态库)**：
-  - 集成在进程空间内，负责 IPC 通信的封装。
-  - **VFS 垫片**：在用户空间维护轻量级状态（CWD、每进程挂载点）。
+> 代码锚点：`service/warren/src/warren/process.rs`、`service/warren/src/warren/mod.rs`、`service/ape/src/ape/mod.rs`、`service/ape/src/ape/syscall/process.rs`
 
-## 3. 服务路由映射
+### 2.3 当前已实现 syscall 范围
 
-APE 将 Linux 的资源请求路由到相应的 Glenda 原生服务：
+当前 APE 映射包含：
 
-| Linux 资源 | 后端服务 | 协议 | 实现方式 |
-| :--- | :--- | :--- | :--- |
-| **文件系统 (FS)** | **Fossil** | FS 协议 + SHM | FD 映射到文件 Capability |
-| **网络 (Network)** | **Gopher** | Socket IPC | APE 代理 Socket 状态 |
-| **硬件/设备** | **Unicorn** | 设备特定 IPC | 映射为后端 Virtio 设备 |
-| **进程/内存**| **Warren** | Process/Mem | 封装 `fork`, `exec`, `sbrk` |
-| **时间/定时器**| **March** | vDSO / Timer | 共享内存 / 信号通知 |
+- 进程/内存：`getpid/gettid/getppid/set_tid_address/exit/exit_group/brk/mmap/mprotect/munmap/execve/clone`；
+- 文件与终端：`openat/close/read/write/readv/writev/lseek/ioctl`；
+- 基础兼容：`uname/rt_sigaction/rt_sigprocmask/set_robust_list/prlimit64/clock_gettime/gettimeofday/nanosleep/getrandom/getuid/geteuid/getgid/getegid`。
 
-## 4. 关键原语实现
+> 代码锚点：`service/ape/src/ape/handler.rs`
 
-### 4.1 信号模拟 (Signal Emulation)
-- **注册**：程序通过 APE 向 Warren 注册一个专用的回复端点（Reply Endpoint）。
-- **投递**：当 APE 服务确定需要投递信号时，通过该端点发送 IPC，APE 库在用户态接管执行流，模拟执行 POSIX 信号处理函数。
+## 3. 后端路由（当前）
 
-### 4.2 进程克隆 (Fork/Exec)
-- `fork()`: 调用 Warren 创建新进程，利用内核的地址空间克隆及 Capability 复制。
-- `exec()`: 由 APE 请求 Warren 重新解析 ELF 头部。如果是 Linux ELF，Warren 会自动将 APE 服务关联为该进程的异常处理程序。
+| Linux 语义 | 后端服务 | 当前实现方式 |
+| :--- | :--- | :--- |
+| 进程对象生命周期 | Warren | `ProcessClient::create/get_cnode/kill` |
+| 堆/页表相关能力分配 | Warren | `ResourceClient::alloc/free` + APE 侧映射策略 |
+| 文件系统 I/O | FS（通过 `FsClient`） | APE 维护 fd 表；每个打开文件可使用独立 badged endpoint |
+| 终端 I/O | Prism | `TERM_GET_STR/TERM_PUT_STR/TERM_IOCTL` |
 
-## 5. 性能优化
-*   **零拷贝 I/O**: 对于大块数据传输，APE 自动在进程空间与服务间建立共享内存映射。
-*   **vDSO 共享**: 全系统共享同一个只读时间/状态页，减少内核内存占用。
+## 4. 安全与性能白名单设计
+
+本节定义“哪些操作必须经过 APE 代理（控制面）”与“哪些操作可下放为直连（数据面）”。
+
+### 4.1 强制代理白名单（控制面，必须经 APE）
+
+下列请求必须经过 APE，不允许应用直接持有等价高权限能力：
+
+1. **生命周期控制**：`clone/execve/exit/exit_group`；
+2. **地址空间策略**：`mmap/munmap/mprotect/brk`（需要维护 APE 的 `memory_maps/lazy_memory_maps` 一致性）；
+3. **命名空间与路径策略**：`openat` 的路径解析（`cwd/root_dir`）与 tty 特殊路径判定；
+4. **权限敏感 ioctl / 设备控制**；
+5. **任何 capability 铸造、转移、注册类动作**（保留在 Warren + APE 控制面）。
+
+**安全目标**：避免应用绕过 APE 状态机导致 pid/fd/映射失真，或直接升级资源权限。
+
+### 4.2 可直连白名单（数据面，按能力下放）
+
+在不破坏控制面一致性的前提下，允许对“已授权对象”的高频数据操作走直连：
+
+1. **文件句柄数据 I/O**：对已打开文件句柄的 `read/write/readv/writev`；
+2. **终端字节流 I/O**：`TERM_GET_STR/TERM_PUT_STR`（仅限被授予的 VT endpoint）；
+3. **纯查询类本地调用**：如 `clock_gettime/gettimeofday` 可继续优化为更短路径（不改变权限模型）。
+
+直连前提：
+
+- 能力必须是 **最小权限** 且 **对象级别**（不授予全局服务管理能力）；
+- 由 APE/Warren 分配并可撤销；
+- 直连失败可回退到 APE 代理路径。
+
+### 4.3 默认拒绝策略
+
+未列入“可直连白名单”的请求，默认走 APE 代理。
+
+即：
+
+$$
+	ext{DirectAllowed(op)} = op \in \text{Whitelist}_{data}
+$$
+
+否则：
+
+$$
+	ext{Route}(op) = \text{APE Proxy}
+$$
+
+## 5. 采用该白名单的性能/安全权衡
+
+- **性能**：高频数据面减少一次或多次中转 IPC；APE 压力与尾延迟下降；
+- **安全**：控制面仍集中，避免生命周期与权限模型分裂；
+- **可维护性**：通过“默认代理 + 小范围直连白名单”控制复杂度，便于逐步演进。
+
+## 6. 相关代码锚点
+
+- APE syscall 分发：`service/ape/src/ape/handler.rs`
+- APE I/O 路径：`service/ape/src/ape/syscall/io.rs`
+- APE 进程/内存路径：`service/ape/src/ape/syscall/process.rs`
+- APE fault 与生命周期清理：`service/ape/src/ape/fault.rs`
+- Warren 进程创建与回收：`service/warren/src/warren/process.rs`、`service/warren/src/warren/mod.rs`
 

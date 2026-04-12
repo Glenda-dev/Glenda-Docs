@@ -9,26 +9,21 @@
 ## 指令 (Commands)
 
 ### 生命周期 (Lifecycle)
-*   `SPAWN` (1): 创建新进程。
-*   `EXIT` (2): 终止当前进程。
-*   `WAIT` (3): 等待子进程退出。
-*   `KILL` (4): 终止其他进程。
-*   `FORK` (5): Fork 当前进程 (COW)。
-
-### 内存管理 (Memory Management)
-*   `SBRK` (6): 调整程序断点 (Heap)。
-*   `MMAP` (7): 映射内存页。
-*   `MUNMAP` (8): 取消映射内存页。
+*   `CREATE` (`0x01`): 创建一个空进程对象并返回 PID。
+*   `SPAWN` (`0x02`): 创建并加载可执行镜像。
+*   `EXIT` (`0x03`): 终止当前进程。
+*   `KILL` (`0x04`): 终止目标进程。
 
 ### 线程控制 (Thread Control)
-*   `THREAD_CREATE` (9): 在当前进程中创建新线程。
-*   `THREAD_EXIT` (10): 退出当前线程。
-*   `THREAD_JOIN` (11): 等待线程结束。
-*   `FUTEX_WAIT` (12): 等待 Futex。
-*   `FUTEX_WAKE` (13): 唤醒 Futex 等待者。
-*   `YIELD` (14): 让出 CPU。
-*   `SLEEP` (15): 睡眠一段时间。
+*   `THREAD_CREATE` (`0x10`): 在目标进程内创建线程。
+*   `THREAD_EXIT` (`0x11`): 线程退出（预留）。
+*   `THREAD_JOIN` (`0x12`): 等待线程结束（预留）。
+*   `YIELD` (`0x15`): 让出 CPU（预留）。
 
 ### 调试与检查 (Debugging & Inspection)
-*   `GET_PID` (16): 获取当前进程 ID。
-*   `PS` (17): 列出进程。
+*   `GET_CNODE` (`0x20`): 获取目标进程 CNode 能力（按权限检查）。
+
+## 说明
+
+- `WAIT/FORK/MMAP/MUNMAP/SBRK` 等 Linux 风格语义不属于 `PROCESS_PROTO` 指令集本体；
+- 这些语义通常由 APE 在 Linux ABI 层实现，并通过 `PROCESS_PROTO + RESOURCE_PROTO` 组合完成底层资源操作。
